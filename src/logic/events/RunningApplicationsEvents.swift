@@ -1,4 +1,4 @@
-import Cocoa
+@preconcurrency import Cocoa
 
 class RunningApplicationsEvents {
     private static var appsObserver: NSKeyValueObservation!
@@ -6,11 +6,13 @@ class RunningApplicationsEvents {
 
     static func observe() {
         previousValueOfRunningApps = Set(NSWorkspace.shared.runningApplications)
-        appsObserver = NSWorkspace.shared.observe(\.runningApplications, options: [.old, .new], changeHandler: handleEvent)
+        appsObserver = NSWorkspace.shared.observe(\.runningApplications, options: [.old, .new]) { @Sendable workspace, change in
+            Self.handleEvent(workspace, change)
+        }
     }
 
     // TODO: handle this on a separate thread?
-    private static func handleEvent<A>(_: NSWorkspace, _ change: NSKeyValueObservedChange<A>) {
+    private static func handleEvent(_: NSWorkspace, _ change: NSKeyValueObservedChange<[NSRunningApplication]>) {
         let workspaceApps = Set(NSWorkspace.shared.runningApplications)
         // TODO: symmetricDifference has bad performance
         let diff = Array(workspaceApps.symmetricDifference(previousValueOfRunningApps))

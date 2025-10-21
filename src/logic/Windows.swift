@@ -4,6 +4,10 @@ class Windows {
     static var list = [Window]()
     static var focusedWindowIndex = Int(0)
     static var hoveredWindowIndex: Int?
+    // When set, overrides the meaning of "active app" for filtering when
+    // Preferences.appsToShow[shortcutIndex] == .active. Used to honor the
+    // app selected in the Applications list when switching to the Windows list.
+    static var activePidOverride: pid_t?
     private static var lastWindowActivityType = WindowActivityType.none
 
     /// Updates windows "lastFocusOrder" to ensure unique values based on window z-order.
@@ -364,7 +368,13 @@ class Windows {
                         ($0.hide == .always || (window.isWindowlessApp && $0.hide != .none))
                 }
             } ?? false) &&
-            !(Preferences.appsToShow[App.app.shortcutIndex] == .active && window.application.pid != NSWorkspace.shared.frontmostApplication?.processIdentifier) &&
+            {
+                if Preferences.appsToShow[App.app.shortcutIndex] == .active {
+                    let activePid = Windows.activePidOverride ?? NSWorkspace.shared.frontmostApplication?.processIdentifier
+                    return window.application.pid == activePid
+                }
+                return true
+            }() &&
             !(!(Preferences.showHiddenWindows[App.app.shortcutIndex] != .hide) && window.isHidden) &&
             ((!Preferences.hideWindowlessApps && window.isWindowlessApp) ||
                 !window.isWindowlessApp &&

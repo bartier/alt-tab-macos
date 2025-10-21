@@ -231,21 +231,24 @@ class App: AppCenterApplication {
     func showUiOrCycleSelection(_ shortcutIndex: Int) {
         App.app.appIsBeingUsed = true
         if isFirstSummon || shortcutIndex != self.shortcutIndex {
-            // If we are switching shortcut modes while the UI is open, remember the
-            // currently selected application's pid from the open UI selection.
-            // This ensures that when switching from Applications → Windows, we target
-            // the app selected in the list (not the frontmost OS app).
-            let previousSelectedAppPid: pid_t? = Windows.focusedWindow()?.application.pid
+            // If we are switching shortcut modes while the UI is open, we may
+            // need the selected application's pid — but only when transitioning
+            // from Applications → Windows view.
+            let previousShortcutIndex = self.shortcutIndex
+            let previousSelectedAppPid: pid_t? = Preferences.onlyShowApplications(previousShortcutIndex)
+                ? Windows.focusedWindow()?.application.pid
+                : nil
             if isVeryFirstSummon {
                 Windows.sortByLevel()
                 isVeryFirstSummon = false
             }
             isFirstSummon = false
-            // Before updating UI for the new shortcut, determine whether the new
-            // mode is Windows with "active app only" filtering. If so, override
-            // the active pid to the app selected in the Applications list.
-            if !Preferences.onlyShowApplications(shortcutIndex)
-                   && Preferences.appsToShow[shortcutIndex] == .active {
+            // Before updating UI for the new shortcut, only override the active
+            // PID when transitioning from Applications → Windows AND the new
+            // Windows view is filtered to the active app.
+            let switchingFromAppsToWindows = Preferences.onlyShowApplications(previousShortcutIndex)
+                && !Preferences.onlyShowApplications(shortcutIndex)
+            if switchingFromAppsToWindows && Preferences.appsToShow[shortcutIndex] == .active {
                 Windows.activePidOverride = previousSelectedAppPid
             } else {
                 Windows.activePidOverride = nil
@@ -253,16 +256,13 @@ class App: AppCenterApplication {
             self.shortcutIndex = shortcutIndex
             NSScreen.updatePreferred()
             if !Windows.updatesBeforeShowing() { hideUi(); return }
-            // When switching to the Windows list, initialize focus to a window
-            // belonging to the previously selected app in the Applications list.
-            // Use the remembered PID unconditionally to respect the selected app.
-            if let pid = previousSelectedAppPid,
-               !Preferences.onlyShowApplications(self.shortcutIndex) {
-                if let targetIndex = Windows.list.firstIndex(where: { $0.application.pid == pid && $0.shouldShowTheUser }) {
-                    Windows.updateFocusedAndHoveredWindowIndex(targetIndex)
-                } else {
-                    Windows.setInitialFocusedAndHoveredWindowIndex()
-                }
+            // When switching from Applications → Windows, initialize focus to a
+            // window belonging to the previously selected app in the Applications list.
+            if switchingFromAppsToWindows,
+               let pid = previousSelectedAppPid,
+               !Preferences.onlyShowApplications(self.shortcutIndex),
+               let targetIndex = Windows.list.firstIndex(where: { $0.application.pid == pid && $0.shouldShowTheUser }) {
+                Windows.updateFocusedAndHoveredWindowIndex(targetIndex)
             } else {
                 Windows.setInitialFocusedAndHoveredWindowIndex()
             }

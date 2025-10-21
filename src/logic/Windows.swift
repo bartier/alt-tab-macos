@@ -101,8 +101,12 @@ class Windows {
             hoveredWindowIndex = nil
             ThumbnailsView.highlight(oldIndex)
         }
-        if let app = Applications.find(NSWorkspace.shared.frontmostApplication?.processIdentifier),
-           (app.focusedWindow == nil || Preferences.windowOrder[App.app.shortcutIndex] != .recentlyFocused),
+        // When ordering by Recently Focused, always start selection on the
+        // previously focused item (i.e. the next MRU), regardless of whether
+        // the front app's focusedWindow has been observed yet. This avoids
+        // a race where app.focusedWindow can be nil briefly after a switch,
+        // causing selection to wrongly default to the current front app.
+        if Preferences.windowOrder[App.app.shortcutIndex] != .recentlyFocused,
            let lastFocusedWindowIndex = getLastFocusedWindowIndex() {
             updateFocusedAndHoveredWindowIndex(lastFocusedWindowIndex)
         } else {

@@ -8,9 +8,11 @@ class Preferences {
         "holdShortcut": "⌥",
         "holdShortcut2": "⌥",
         "holdShortcut3": "⌥",
+        "holdShortcut4": "⌥",
         "nextWindowShortcut": "⇥",
         "nextWindowShortcut2": keyAboveTabDependingOnInputSource(),
         "nextWindowShortcut3": "",
+        "nextWindowShortcut4": "",
         "nextWindowGesture": GesturePreference.disabled.indexAsString,
         "focusWindowShortcut": "Space",
         "previousWindowShortcut": "⇧",
@@ -94,8 +96,8 @@ class Preferences {
     static var finderShowsQuitMenuItem: Bool { UserDefaults(suiteName: "com.apple.Finder")?.bool(forKey: "QuitMenuItem") ?? false }
 
     // persisted values
-    static var holdShortcut: [String] { ["holdShortcut", "holdShortcut2", "holdShortcut3"].map { CachedUserDefaults.string($0) } }
-    static var nextWindowShortcut: [String] { ["nextWindowShortcut", "nextWindowShortcut2", "nextWindowShortcut3"].map { CachedUserDefaults.string($0) } }
+    static var holdShortcut: [String] { ["holdShortcut", "holdShortcut2", "holdShortcut3", "holdShortcut4"].map { CachedUserDefaults.string($0) } }
+    static var nextWindowShortcut: [String] { ["nextWindowShortcut", "nextWindowShortcut2", "nextWindowShortcut3", "nextWindowShortcut4"].map { CachedUserDefaults.string($0) } }
     static var nextWindowGesture: GesturePreference { CachedUserDefaults.macroPref("nextWindowGesture", GesturePreference.allCases) }
     static var focusWindowShortcut: String { CachedUserDefaults.string("focusWindowShortcut") }
     static var previousWindowShortcut: String { CachedUserDefaults.string("previousWindowShortcut") }

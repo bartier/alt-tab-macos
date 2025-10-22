@@ -447,14 +447,29 @@ class ThumbnailView: FlippedView {
     }
 
     private func getAppOrAndWindowTitle() -> String {
-        let appName = window_?.application.displayName
-        let windowTitle = window_?.title
-        if Preferences.onlyShowApplications(App.app.shortcutIndex) || Preferences.showTitles == .appName {
-            return appName ?? ""
-        } else if Preferences.showTitles == .appNameAndWindowTitle {
-            return [appName, windowTitle].compactMap { $0 }.joined(separator: " - ")
+        let appName = window_?.application.displayName ?? ""
+        let windowTitle = window_?.title ?? ""
+
+        // Keep existing behavior when showing applications
+        if Preferences.onlyShowApplications(App.app.shortcutIndex) {
+            if Preferences.showTitles == .appNameAndWindowTitle {
+                // Preserve existing separator " - " in applications view
+                return [appName, windowTitle].filter { !$0.isEmpty }.joined(separator: " - ")
+            }
+            // Default to app name (or explicit .appName)
+            return appName
         }
-        return windowTitle ?? ""
+
+        // Windows view: dynamic behavior based on how many windows belong to the same app
+        // If more than one window for this app is present, show "App Name: Window Title"
+        // If only one, show just the app name
+        let sameAppCount = Windows.list.filter { $0.application.pid == window_?.application.pid }.count
+        if sameAppCount > 1 {
+            if windowTitle.isEmpty { return appName }
+            return "\(appName): \(windowTitle)"
+        } else {
+            return appName
+        }
     }
 
     private func setFrameWidthHeight(_ newHeight: CGFloat) {

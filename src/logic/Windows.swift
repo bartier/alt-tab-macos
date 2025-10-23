@@ -1,4 +1,5 @@
 import Cocoa
+import ApplicationServices.HIServices.AXAttributeConstants
 
 class Windows {
     static var list = [Window]()
@@ -298,10 +299,13 @@ class Windows {
         let spaceIdsAndIndexes = Spaces.idsAndIndexes.map { $0.0 }
         lazy var cgsWindowIds = Spaces.windowsInSpaces(spaceIdsAndIndexes)
         lazy var visibleCgsWindowIds = Spaces.windowsInSpaces(spaceIdsAndIndexes, false)
+        // Resolve the active PID once to avoid stale NSWorkspace values when switching apps via tools like Alfred.
+        // This snapshot is only used if filtering by active app is enabled.
+        let activePidSnapshot: pid_t? = Windows.activePidOverride ?? Windows.resolveActivePid()
         for window in list {
             detectTabbedWindows(window, cgsWindowIds, visibleCgsWindowIds)
             updatesWindowSpace(window)
-            refreshIfWindowShouldBeShownToTheUser(window)
+            refreshIfWindowShouldBeShownToTheUser(window, activePidSnapshot)
         }
         refreshWhichWindowsToShowTheUser()
         sort()
@@ -364,7 +368,7 @@ class Windows {
         }
     }
 
-    private static func refreshIfWindowShouldBeShownToTheUser(_ window: Window) {
+    private static func refreshIfWindowShouldBeShownToTheUser(_ window: Window, _ activePidSnapshot: pid_t?) {
         window.shouldShowTheUser =
             !(window.application.bundleIdentifier.flatMap { id in
                 Preferences.blacklist.contains {
@@ -374,8 +378,7 @@ class Windows {
             } ?? false) &&
             {
                 if Preferences.appsToShow[App.app.shortcutIndex] == .active {
-                    let activePid = Windows.activePidOverride ?? NSWorkspace.shared.frontmostApplication?.processIdentifier
-                    return window.application.pid == activePid
+                    return window.application.pid == activePidSnapshot
                 }
                 return true
             }() &&
@@ -387,6 +390,68 @@ class Windows {
                 !(Preferences.spacesToShow[App.app.shortcutIndex] == .visible && !Spaces.visibleSpaces.contains { visibleSpace in window.spaceIds.contains { $0 == visibleSpace } }) &&
                 !(Preferences.screensToShow[App.app.shortcutIndex] == .showingAltTab && !window.isOnScreen(NSScreen.preferred)) &&
                 (Preferences.showTabsAsWindows || !window.isTabbed))
+    }
+
+    /// Determine the active app PID using multiple signals to avoid transient mismatches
+    /// when switching via launchers (e.g., Alfred).
+    /// Uses voting among: WindowServer front process, CGWindow frontmost owner,
+    /// AX focused application, NSWorkspace frontmost application.
+    static func resolveActivePid() -> pid_t? {
+        var candidates = [pid_t]()
+        if let p = slpsFrontProcessPid() { candidates.append(p) }
+        if let p = cgFrontmostRegularAppPid() { candidates.append(p) }
+        if let p = axFocusedAppPid() { candidates.append(p) }
+        if let p = NSWorkspace.shared.frontmostApplication?.processIdentifier { candidates.append(p) }
+
+        if candidates.isEmpty { return nil }
+        var counts = [pid_t: Int]()
+        for p in candidates { counts[p, default: 0] += 1 }
+        let maxCount = counts.values.max() ?? 1
+        var topPids = counts.filter { $0.value == maxCount }.map { $0.key }
+
+        // Filter out known transient overlays if they tie with others
+        if topPids.count > 1 {
+            let filtered = topPids.filter { !isIgnoredTransientApp($0) }
+            if !filtered.isEmpty { topPids = filtered }
+        }
+
+        if let slps = slpsFrontProcessPid(), topPids.contains(slps) { return slps }
+        return topPids.first ?? candidates.first
+    }
+
+    private static func slpsFrontProcessPid() -> pid_t? {
+        var psn = ProcessSerialNumber()
+        if _SLPSGetFrontProcess(&psn) == noErr {
+            var pid: pid_t = 0
+            GetProcessPID(&psn, &pid)
+            if pid != 0 { return pid }
+        }
+        return nil
+    }
+
+    private static func axFocusedAppPid() -> pid_t? {
+        let systemWide = AXUIElementCreateSystemWide()
+        if let focusedApp = ((try? systemWide.attribute(kAXFocusedApplicationAttribute, AXUIElement.self)) ?? nil),
+           let pid = ((try? focusedApp.pid()) ?? nil) {
+            return pid
+        }
+        return nil
+    }
+
+    private static func cgFrontmostRegularAppPid() -> pid_t? {
+        for w in CGWindow.windows(.optionOnScreenOnly) { // front to back
+            if w.layer() == 0, let pid = w.ownerPID(), pid != ProcessInfo.processInfo.processIdentifier {
+                if let running = NSRunningApplication(processIdentifier: pid), running.activationPolicy == .regular {
+                    return pid
+                }
+            }
+        }
+        return nil
+    }
+
+    private static func isIgnoredTransientApp(_ pid: pid_t) -> Bool {
+        guard let running = NSRunningApplication(processIdentifier: pid), let id = running.bundleIdentifier else { return false }
+        return id == "com.runningwithcrayons.Alfred" || id == "com.apple.Spotlight"
     }
 
     /// Selects the most appropriate main window from a given list of windows.

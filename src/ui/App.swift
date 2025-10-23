@@ -287,6 +287,8 @@ class App: AppCenterApplication {
         guard appIsBeingUsed else { return }
         Appearance.update()
         guard appIsBeingUsed else { return }
+        // Recompute window visibility using the freshest active app snapshot before our panel becomes key
+        if !Windows.updatesBeforeShowing() { hideUi(); return }
         thumbnailsPanel.makeKeyAndOrderFront(nil) // workaround: without this, switching between 2 screens make thumbnailPanel invisible
         KeyRepeatTimer.toggleRepeatingKeyNextWindow()
         guard appIsBeingUsed else { return }
@@ -294,6 +296,12 @@ class App: AppCenterApplication {
         guard appIsBeingUsed else { return }
         thumbnailsPanel.show()
         refreshOpenUi(Windows.list, .refreshOnlyThumbnailsAfterShowUi)
+        // After showing, re-evaluate once more shortly after to catch any late front-app changes
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(140)) {
+            if self.appIsBeingUsed && Windows.updatesBeforeShowing() {
+                self.refreshOpenUi([], .refreshUiAfterExternalEvent)
+            }
+        }
     }
 
     func checkIfShortcutsShouldBeDisabled(_ activeWindow: Window?, _ activeApp: NSRunningApplication?) {

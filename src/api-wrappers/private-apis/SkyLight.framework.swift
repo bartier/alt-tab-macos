@@ -194,6 +194,11 @@ enum SLPSMode: UInt32 {
 @_silgen_name("_SLPSSetFrontProcessWithOptions") @discardableResult
 func _SLPSSetFrontProcessWithOptions(_ psn: UnsafeMutablePointer<ProcessSerialNumber>, _ wid: CGWindowID, _ mode: SLPSMode.RawValue) -> CGError
 
+/// returns the front process PSN
+/// * macOS 10.12+
+@_silgen_name("_SLPSGetFrontProcess") @discardableResult
+func _SLPSGetFrontProcess(_ psn: UnsafeMutablePointer<ProcessSerialNumber>) -> OSStatus
+
 /// sends bytes to the WindowServer
 /// more context: https://github.com/Hammerspoon/hammerspoon/issues/370#issuecomment-545545468
 /// * macOS 10.12+

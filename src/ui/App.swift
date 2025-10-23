@@ -209,7 +209,7 @@ class App: AppCenterApplication {
         }
         guard appIsBeingUsed else { return }
         if source == .refreshUiAfterExternalEvent {
-            if !Windows.updatesBeforeShowing() { hideUi(); return }
+            if !Windows.updatesBeforeShowing(true) { hideUi(); return }
         }
         guard appIsBeingUsed else { return }
         Windows.updateFocusedWindowIndex()
@@ -255,7 +255,7 @@ class App: AppCenterApplication {
             }
             self.shortcutIndex = shortcutIndex
             NSScreen.updatePreferred()
-            if !Windows.updatesBeforeShowing() { hideUi(); return }
+            if !Windows.updatesBeforeShowing(true) { hideUi(); return }
             // When switching from Applications → Windows, initialize focus to a
             // window belonging to the previously selected app in the Applications list.
             if switchingFromAppsToWindows,
@@ -288,7 +288,7 @@ class App: AppCenterApplication {
         Appearance.update()
         guard appIsBeingUsed else { return }
         // Recompute window visibility using the freshest active app snapshot before our panel becomes key
-        if !Windows.updatesBeforeShowing() { hideUi(); return }
+        if !Windows.updatesBeforeShowing(true) { hideUi(); return }
         thumbnailsPanel.makeKeyAndOrderFront(nil) // workaround: without this, switching between 2 screens make thumbnailPanel invisible
         KeyRepeatTimer.toggleRepeatingKeyNextWindow()
         guard appIsBeingUsed else { return }

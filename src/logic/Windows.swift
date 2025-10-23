@@ -290,7 +290,7 @@ class Windows {
         }
     }
 
-    static func updatesBeforeShowing() -> Bool {
+    static func updatesBeforeShowing(_ stabilizeActive: Bool = false) -> Bool {
         if list.count == 0 || MissionControl.state() == .showAllWindows || MissionControl.state() == .showFrontWindows { return false }
         // TODO: find a way to update space info when spaces are changed, instead of on every trigger
         // workaround: when Preferences > Mission Control > "Displays have separate Spaces" is unchecked,
@@ -299,9 +299,9 @@ class Windows {
         let spaceIdsAndIndexes = Spaces.idsAndIndexes.map { $0.0 }
         lazy var cgsWindowIds = Spaces.windowsInSpaces(spaceIdsAndIndexes)
         lazy var visibleCgsWindowIds = Spaces.windowsInSpaces(spaceIdsAndIndexes, false)
-        // Resolve the active PID once to avoid stale NSWorkspace values when switching apps via tools like Alfred.
+        // Resolve the active PID once to avoid stale values when switching apps via tools like Alfred.
         // This snapshot is only used if filtering by active app is enabled.
-        let activePidSnapshot: pid_t? = Windows.activePidOverride ?? Windows.resolveActivePid()
+        let activePidSnapshot: pid_t? = Windows.activePidOverride ?? Windows.resolveActivePid(stabilizeActive)
         for window in list {
             detectTabbedWindows(window, cgsWindowIds, visibleCgsWindowIds)
             updatesWindowSpace(window)
@@ -396,7 +396,21 @@ class Windows {
     /// when switching via launchers (e.g., Alfred).
     /// Uses voting among: WindowServer front process, CGWindow frontmost owner,
     /// AX focused application, NSWorkspace frontmost application.
-    static func resolveActivePid() -> pid_t? {
+    static func resolveActivePid(_ stabilize: Bool = false) -> pid_t? {
+        // If requested, wait briefly when a transient overlay is frontmost
+        if stabilize && Preferences.appsToShow[App.app.shortcutIndex] == .active {
+            if let slps0 = slpsFrontProcessPid() {
+                if !isIgnoredTransientApp(slps0) {
+                    return slps0
+                }
+                for _ in 0..<12 { // ~300ms total
+                    spinWait(milliseconds: 25)
+                    if let pid = slpsFrontProcessPid(), !isIgnoredTransientApp(pid) {
+                        return pid
+                    }
+                }
+            }
+        }
         var candidates = [pid_t]()
         if let p = slpsFrontProcessPid() { candidates.append(p) }
         if let p = cgFrontmostRegularAppPid() { candidates.append(p) }
@@ -452,6 +466,10 @@ class Windows {
     private static func isIgnoredTransientApp(_ pid: pid_t) -> Bool {
         guard let running = NSRunningApplication(processIdentifier: pid), let id = running.bundleIdentifier else { return false }
         return id == "com.runningwithcrayons.Alfred" || id == "com.apple.Spotlight"
+    }
+
+    private static func spinWait(milliseconds: Int) {
+        RunLoop.current.run(mode: .common, before: Date(timeIntervalSinceNow: Double(milliseconds) / 1000.0))
     }
 
     /// Selects the most appropriate main window from a given list of windows.

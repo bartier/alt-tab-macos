@@ -35,6 +35,8 @@ fileprivate func applicationActivated(_ element: AXUIElement, _ pid: pid_t) thro
     let appFocusedWindow = try element.focusedWindow()
     let wid = try appFocusedWindow?.cgWindowId()
     DispatchQueue.main.async {
+        // Record most recent activation promptly to improve active app resolution
+        Windows.setLastActivatedPid(pid)
         if let app = Applications.find(pid) {
             if app.hasBeenActiveOnce != true {
                 app.hasBeenActiveOnce = true

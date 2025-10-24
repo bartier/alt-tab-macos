@@ -10,6 +10,15 @@ class Windows {
     // app selected in the Applications list when switching to the Windows list.
     static var activePidOverride: pid_t?
     private static var lastWindowActivityType = WindowActivityType.none
+    // Tracks the most recently activated application (per AX activation events)
+    // to guard against races when resolving the front app (e.g., launcher-triggered switches).
+    static var lastActivatedPid: pid_t?
+    static var lastActivatedAt: CFAbsoluteTime = 0
+
+    static func setLastActivatedPid(_ pid: pid_t) {
+        lastActivatedPid = pid
+        lastActivatedAt = CFAbsoluteTimeGetCurrent()
+    }
 
     /// Updates windows "lastFocusOrder" to ensure unique values based on window z-order.
     /// Windows are ordered by their position in Spaces.windowsInSpaces() results,
@@ -405,15 +414,21 @@ class Windows {
 
     /// Determine the active app PID using multiple signals to avoid transient mismatches
     /// when switching via launchers (e.g., Alfred).
-    /// Uses voting among: WindowServer front process, CGWindow frontmost owner,
-    /// AX focused application, NSWorkspace frontmost application.
+    /// Uses voting among: AX focused application, NSWorkspace frontmost application,
+    /// CGWindow frontmost owner, WindowServer front process.
     static func resolveActivePid(_ stabilize: Bool = false) -> pid_t? {
+        // First, honor a very recent activation notification if present.
+        // This helps when global hotkeys fire before the system fully updates
+        // frontmost signals across different APIs.
+        if let recent = lastActivatedPid,
+           CFAbsoluteTimeGetCurrent() - lastActivatedAt < 1.0,
+           !isIgnoredTransientApp(recent) {
+            return recent
+        }
+
         // If requested, wait briefly when a transient overlay is frontmost
         if stabilize && Preferences.appsToShow[App.app.shortcutIndex] == .active {
-            if let slps0 = slpsFrontProcessPid() {
-                if !isIgnoredTransientApp(slps0) {
-                    return slps0
-                }
+            if let slps0 = slpsFrontProcessPid(), isIgnoredTransientApp(slps0) {
                 for _ in 0..<12 { // ~300ms total
                     spinWait(milliseconds: 25)
                     if let pid = slpsFrontProcessPid(), !isIgnoredTransientApp(pid) {
@@ -422,11 +437,17 @@ class Windows {
                 }
             }
         }
+
+        let ax = axFocusedAppPid()
+        let ws = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let cg = cgFrontmostRegularAppPid()
+        let slps = slpsFrontProcessPid()
+
         var candidates = [pid_t]()
-        if let p = slpsFrontProcessPid() { candidates.append(p) }
-        if let p = cgFrontmostRegularAppPid() { candidates.append(p) }
-        if let p = axFocusedAppPid() { candidates.append(p) }
-        if let p = NSWorkspace.shared.frontmostApplication?.processIdentifier { candidates.append(p) }
+        if let p = ax { candidates.append(p) }
+        if let p = ws { candidates.append(p) }
+        if let p = cg { candidates.append(p) }
+        if let p = slps { candidates.append(p) }
 
         if candidates.isEmpty { return nil }
         var counts = [pid_t: Int]()
@@ -440,7 +461,11 @@ class Windows {
             if !filtered.isEmpty { topPids = filtered }
         }
 
-        if let slps = slpsFrontProcessPid(), topPids.contains(slps) { return slps }
+        // When in doubt, prefer AX/Workspace which reflect keyboard focus
+        if let p = ax, topPids.contains(p) { return p }
+        if let p = ws, topPids.contains(p) { return p }
+        if let p = cg, topPids.contains(p) { return p }
+        if let p = slps, topPids.contains(p) { return p }
         return topPids.first ?? candidates.first
     }
 

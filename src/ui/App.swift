@@ -23,6 +23,7 @@ class App: AppCenterApplication {
     var permissionsWindow: PermissionsWindow!
     var appIsBeingUsed = false
     var shortcutIndex = 0
+    private var userNavigatedThisSummon = false
     private var feedbackWindow: FeedbackWindow!
     private var isFirstSummon = true
     private var isVeryFirstSummon = true
@@ -122,6 +123,9 @@ class App: AppCenterApplication {
 
     func focusTarget() {
         guard appIsBeingUsed else { return } // already hidden
+        // If the user didn't navigate after summoning the Windows list for the active app,
+        // enforce toggle-to-second-most-recent behavior on release when ordering by Recently Focused.
+        if !userNavigatedThisSummon { ensureSecondMRUForActiveAppIfNeeded() }
         let focusedWindow = Windows.focusedWindow()
         Logger.info(focusedWindow?.cgWindowId.map { String(describing: $0) } ?? "nil", focusedWindow?.title ?? "nil", focusedWindow?.application.pid ?? "nil", focusedWindow?.application.bundleIdentifier ?? "nil")
         focusSelectedWindow(focusedWindow)
@@ -173,6 +177,7 @@ class App: AppCenterApplication {
         } else {
             Windows.cycleFocusedWindowIndex(direction.step(), allowWrap: allowWrap)
         }
+        userNavigatedThisSummon = true
     }
 
     func previousWindowShortcutWithRepeatingKey() {
@@ -231,6 +236,7 @@ class App: AppCenterApplication {
     func showUiOrCycleSelection(_ shortcutIndex: Int) {
         App.app.appIsBeingUsed = true
         if isFirstSummon || shortcutIndex != self.shortcutIndex {
+            userNavigatedThisSummon = false
             // If we are switching shortcut modes while the UI is open, we may
             // need the selected application's pid — but only when transitioning
             // from Applications → Windows view.
@@ -258,14 +264,25 @@ class App: AppCenterApplication {
             if !Windows.updatesBeforeShowing(true) { hideUi(); return }
             // When switching from Applications → Windows, initialize focus to a
             // window belonging to the previously selected app in the Applications list.
+            // To preserve "toggle last two windows" behavior on release, if ordering is
+            // Recently Focused and the app has 2+ windows, focus the next MRU (2nd) window.
             if switchingFromAppsToWindows,
                let pid = previousSelectedAppPid,
-               !Preferences.onlyShowApplications(self.shortcutIndex),
-               let targetIndex = Windows.list.firstIndex(where: { $0.application.pid == pid && $0.shouldShowTheUser }) {
-                Windows.updateFocusedAndHoveredWindowIndex(targetIndex)
+               !Preferences.onlyShowApplications(self.shortcutIndex) {
+                let indices = Windows.list.enumerated().filter { $0.element.shouldShowTheUser && $0.element.application.pid == pid }.map { $0.offset }
+                if let first = indices.first {
+                    let order = Preferences.windowOrder[self.shortcutIndex]
+                    let indexToSelect = (order == .recentlyFocused && indices.count > 1) ? indices[1] : first
+                    Windows.updateFocusedAndHoveredWindowIndex(indexToSelect)
+                } else {
+                    Windows.setInitialFocusedAndHoveredWindowIndex()
+                }
             } else {
                 Windows.setInitialFocusedAndHoveredWindowIndex()
             }
+            // Extra safeguard: when showing Windows for the active app with Recently Focused ordering,
+            // always ensure selection is the 2nd MRU if multiple windows exist.
+            ensureSecondMRUForActiveAppIfNeeded()
             if Preferences.windowDisplayDelay == DispatchTimeInterval.milliseconds(0) {
                 buildUiAndShowPanel()
             } else {
@@ -280,6 +297,23 @@ class App: AppCenterApplication {
         } else {
             cycleSelection(.leading)
             KeyRepeatTimer.toggleRepeatingKeyNextWindow()
+        }
+    }
+
+    /// Ensure that when showing the Windows view filtered to the active app and
+    /// ordering by Recently Focused, the selection points to the 2nd MRU window
+    /// so a single press behaves like "toggle between last two windows".
+    private func ensureSecondMRUForActiveAppIfNeeded() {
+        if !Preferences.onlyShowApplications(shortcutIndex)
+              && Preferences.appsToShow[shortcutIndex] == .active
+              && Preferences.windowOrder[shortcutIndex] == .recentlyFocused {
+            let pid = Windows.activePidOverride ?? Windows.resolveActivePid(true)
+            let indices = Windows.list.enumerated()
+                .filter { $0.element.shouldShowTheUser && $0.element.application.pid == pid }
+                .map { $0.offset }
+            if indices.count > 1 && Windows.focusedWindowIndex != indices[1] {
+                Windows.updateFocusedAndHoveredWindowIndex(indices[1])
+            }
         }
     }
 

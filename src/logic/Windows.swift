@@ -302,6 +302,17 @@ class Windows {
         // Resolve the active PID once to avoid stale values when switching apps via tools like Alfred.
         // This snapshot is only used if filtering by active app is enabled.
         let activePidSnapshot: pid_t? = Windows.activePidOverride ?? Windows.resolveActivePid(stabilizeActive)
+        // If filtering to the active app, ensure its focused window (per AX) is treated
+        // as most recent to keep MRU order stable for toggling between last two windows.
+        if Preferences.appsToShow[App.app.shortcutIndex] == .active,
+           let pid = activePidSnapshot,
+           let app = Applications.find(pid),
+           let axApp = app.axUiElement {
+            if let focusedAx = try? axApp.focusedWindow() {
+                let wid = (try? focusedAx.cgWindowId()) ?? 0
+                _ = Windows.updateLastFocus(focusedAx, wid)
+            }
+        }
         for window in list {
             detectTabbedWindows(window, cgsWindowIds, visibleCgsWindowIds)
             updatesWindowSpace(window)

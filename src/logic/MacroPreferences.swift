@@ -649,6 +649,20 @@ enum BlacklistIgnorePreference: String/* required for jsonEncode */, CaseIterabl
     }
 }
 
+enum TitleOverrideMatchType: String/* required for jsonEncode */, CaseIterable, MacroPreference, Codable {
+    case contains = "0"
+    case exact = "1"
+    case regex = "2"
+
+    var localizedString: LocalizedString {
+        switch self {
+            case .contains: return NSLocalizedString("Contains", comment: "")
+            case .exact: return NSLocalizedString("Exact match", comment: "")
+            case .regex: return NSLocalizedString("Regex", comment: "")
+        }
+    }
+}
+
 // MacroPreference are collection of values derived from a single key
 // we don't want to store every value in UserDefaults as the user could change them and contradict the macro
 protocol MacroPreference {

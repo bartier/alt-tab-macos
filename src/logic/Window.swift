@@ -218,6 +218,24 @@ class Window {
         return application.displayName
     }
 
+    // applies the first matching user-defined override rule to the raw title;
+    // returns the raw title when no rule matches. Does not mutate `title`.
+    func displayTitle() -> String {
+        let raw = title ?? ""
+        let appId = application.bundleIdentifier ?? ""
+        for rule in Preferences.titleOverrides where !rule.pattern.isEmpty {
+            if !rule.bundleIdentifier.isEmpty && !appId.hasPrefix(rule.bundleIdentifier) { continue }
+            let hit: Bool
+            switch rule.matchType {
+                case .contains: hit = raw.contains(rule.pattern)
+                case .exact: hit = raw == rule.pattern
+                case .regex: hit = raw.range(of: rule.pattern, options: .regularExpression) != nil
+            }
+            if hit { return rule.replacement }
+        }
+        return raw
+    }
+
     /// window may not be visible on that screen (e.g. the window is not on the current Space)
     func isOnScreen(_ screen: NSScreen) -> Bool {
         if NSScreen.screensHaveSeparateSpaces {

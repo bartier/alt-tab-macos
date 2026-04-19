@@ -448,7 +448,7 @@ class ThumbnailView: FlippedView {
 
     private func getAppOrAndWindowTitle() -> String {
         let appName = window_?.application.displayName ?? ""
-        let windowTitle = window_?.title ?? ""
+        let windowTitle = window_?.displayTitle() ?? ""
 
         // Keep existing behavior when showing applications
         if Preferences.onlyShowApplications(App.app.shortcutIndex) {

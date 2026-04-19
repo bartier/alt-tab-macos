@@ -79,6 +79,7 @@ class Preferences {
         "menubarIconShown": "true",
         "language": LanguagePreference.systemDefault.indexAsString,
         "blacklist": defaultBlacklist(),
+        "titleOverrides": "[]",
         "updatePolicy": UpdatePolicyPreference.autoCheck.indexAsString,
         "crashPolicy": CrashPolicyPreference.ask.indexAsString,
         "shortcutStyle": ShortcutStylePreference.focusOnRelease.indexAsString,
@@ -125,6 +126,7 @@ class Preferences {
     // periphery:ignore
     static var startAtLogin: Bool { CachedUserDefaults.bool("startAtLogin") }
     static var blacklist: [BlacklistEntry] { CachedUserDefaults.json("blacklist", [BlacklistEntry].self) }
+    static var titleOverrides: [TitleOverrideEntry] { CachedUserDefaults.json("titleOverrides", [TitleOverrideEntry].self) }
     static var previewFocusedWindow: Bool { CachedUserDefaults.bool("previewFocusedWindow") }
     static var screenRecordingPermissionSkipped: Bool { CachedUserDefaults.bool("screenRecordingPermissionSkipped") }
 
@@ -180,7 +182,8 @@ class Preferences {
     }
 
     static func set<T>(_ key: String, _ value: T) where T: Encodable {
-        UserDefaults.standard.set(key == "blacklist" ? jsonEncode(value) : value, forKey: key)
+        let needsJsonEncoding = key == "blacklist" || key == "titleOverrides"
+        UserDefaults.standard.set(needsJsonEncoding ? jsonEncode(value) : value, forKey: key)
         CachedUserDefaults.cache.removeValue(forKey: key)
     }
 
@@ -311,4 +314,11 @@ struct BlacklistEntry: Codable {
     var bundleIdentifier: String
     var hide: BlacklistHidePreference
     var ignore: BlacklistIgnorePreference
+}
+
+struct TitleOverrideEntry: Codable {
+    var bundleIdentifier: String
+    var matchType: TitleOverrideMatchType
+    var pattern: String
+    var replacement: String
 }

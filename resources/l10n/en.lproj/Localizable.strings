@@ -54,6 +54,7 @@
 "Check permissions…" = "Check permissions…";
 "Close window" = "Close window";
 "Conflicting shortcut" = "Conflicting shortcut";
+"Contains" = "Contains";
 "Controls" = "Controls";
 "Crash reports policy" = "Crash reports policy";
 "Crash reports policy:" = "Crash reports policy:";
@@ -63,12 +64,14 @@
 "Customize Titles style…" = "Customize Titles style…";
 "Dark" = "Dark";
 "Disabled" = "Disabled";
+"Display as" = "Display as";
 "Do nothing" = "Do nothing";
 "Don’t check for updates periodically" = "Don’t check for updates periodically";
 "Don’t send" = "Don’t send";
 "Don’t show windows from these apps" = "Don’t show windows from these apps";
 "Done" = "Done";
 "End" = "End";
+"Exact match" = "Exact match";
 "Fade out animation" = "Fade out animation";
 "Fade out animation:" = "Fade out animation:";
 "Focus selected window" = "Focus selected window";
@@ -109,6 +112,7 @@
 "Leading" = "Leading";
 "Left" = "Left";
 "Light" = "Light";
+"Match type" = "Match type";
 "Max height on screen:" = "Max height on screen:";
 "Max width on screen:" = "Max width on screen:";
 "Medium" = "Medium";
@@ -143,6 +147,7 @@
 "Recently Created First" = "Recently Created First";
 "Recently Focused" = "Recently Focused";
 "Recently Focused First" = "Recently Focused First";
+"Regex" = "Regex";
 "Remember my choice" = "Remember my choice";
 "Reset preferences and restart" = "Reset preferences and restart";
 "Reset preferences and restart…" = "Reset preferences and restart…";
@@ -213,6 +218,7 @@
 "This permission is needed to show screenshots and titles of open windows" = "This permission is needed to show screenshots and titles of open windows";
 "Thumbnails" = "Thumbnails";
 "Title" = "Title";
+"Title pattern" = "Title pattern";
 "Title truncation" = "Title truncation";
 "Titles" = "Titles";
 "Trigger shortcut" = "Trigger shortcut";
@@ -240,6 +246,7 @@
 "Window min width in row:" = "Window min width in row:";
 "Window order:" = "Window order:";
 "Window Title" = "Window Title";
+"Window Titles" = "Window Titles";
 "Window title font size:" = "Window title font size:";
 "Window title truncation:" = "Window title truncation:";
 "Windows" = "Windows";

@@ -75,6 +75,7 @@ class App: AppCenterApplication {
         appIsBeingUsed = false
         // Clear any active app override used for filtering in Windows list
         Windows.activePidOverride = nil
+        Windows.resetInteractionState()
         isFirstSummon = true
         MouseEvents.toggle(false)
         hideThumbnailPanelWithoutChangingKeyWindow()

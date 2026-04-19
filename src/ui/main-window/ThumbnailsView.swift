@@ -228,9 +228,12 @@ class ThumbnailsView: NSVisualEffectView {
     }
 
     private func highlightStartView() {
-        ThumbnailsView.highlight(Windows.focusedWindowIndex)
-        if let hoveredWindowIndex = Windows.hoveredWindowIndex {
-            ThumbnailsView.highlight(hoveredWindowIndex)
+        // redraw every laid-out cell so stale focused/hovered styling on
+        // previously-highlighted views is cleared, not just the two current ones
+        for row in rows {
+            for view in row {
+                view.drawHighlight()
+            }
         }
     }
 

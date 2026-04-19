@@ -112,6 +112,7 @@ class ThumbnailView: FlippedView {
 
     func updateRecycledCellWithNewContent(_ element: Window, _ index: Int, _ newHeight: CGFloat) {
         window_ = element
+        indexInRecycledViews = index
         updateValues(element, index, newHeight)
         updateSizes(newHeight)
         updatePositions(newHeight)
@@ -245,6 +246,10 @@ class ThumbnailView: FlippedView {
             vStackView.layer!.shadowOpacity = 0.25
             vStackView.layer!.shadowOffset = .zero
             vStackView.layer!.shadowRadius = 1
+        } else {
+            vStackView.layer!.shadowOpacity = 0
+            vStackView.layer!.shadowColor = nil
+            vStackView.layer!.shadowRadius = 0
         }
     }
 

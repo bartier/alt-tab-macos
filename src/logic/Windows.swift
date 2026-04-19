@@ -20,6 +20,11 @@ class Windows {
         lastActivatedAt = CFAbsoluteTimeGetCurrent()
     }
 
+    static func resetInteractionState() {
+        hoveredWindowIndex = nil
+        lastWindowActivityType = .none
+    }
+
     /// Updates windows "lastFocusOrder" to ensure unique values based on window z-order.
     /// Windows are ordered by their position in Spaces.windowsInSpaces() results,
     /// with topmost windows first.

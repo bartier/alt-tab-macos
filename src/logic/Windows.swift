@@ -98,7 +98,7 @@ class Windows {
     private static func compareByAppNameThenWindowTitle(_ w1: Window, _ w2: Window) -> ComparisonResult {
         let order = w1.application.displayName.localizedStandardCompare(w2.application.displayName)
         if order == .orderedSame {
-            return w1.title.localizedStandardCompare(w2.title)
+            return w1.displayTitle().localizedStandardCompare(w2.displayTitle())
         }
         return order
     }

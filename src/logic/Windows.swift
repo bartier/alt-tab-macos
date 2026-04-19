@@ -41,6 +41,11 @@ class Windows {
 
     /// reordered list based on preferences, keeping the original index
     private static func sort() {
+        // pin the user's current selection to the window reference (not the slot)
+        // so external events (e.g. title changes) that re-sort the list don't make
+        // the highlight jump onto whatever happens to land at the old index
+        let pinnedFocused = list.indices.contains(focusedWindowIndex) ? list[focusedWindowIndex] : nil
+        let pinnedHovered = hoveredWindowIndex.flatMap { list.indices.contains($0) ? list[$0] : nil }
         list.sort {
             // separate buckets for these types of windows
             if $0.isWindowlessApp != $1.isWindowlessApp {
@@ -82,6 +87,12 @@ class Windows {
                 order = $0.lastFocusOrder.compare($1.lastFocusOrder)
             }
             return order == .orderedAscending
+        }
+        if let pinnedFocused, let i = list.firstIndex(where: { $0 === pinnedFocused }) {
+            focusedWindowIndex = i
+        }
+        if let pinnedHovered, let i = list.firstIndex(where: { $0 === pinnedHovered }) {
+            hoveredWindowIndex = i
         }
     }
 

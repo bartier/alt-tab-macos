@@ -321,4 +321,19 @@ struct TitleOverrideEntry: Codable {
     var matchType: TitleOverrideMatchType
     var pattern: String
     var replacement: String
+
+    init(bundleIdentifier: String, matchType: TitleOverrideMatchType, pattern: String, replacement: String) {
+        self.bundleIdentifier = bundleIdentifier
+        self.matchType = matchType
+        self.pattern = pattern
+        self.replacement = replacement
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        bundleIdentifier = try c.decode(String.self, forKey: .bundleIdentifier)
+        matchType = try c.decode(TitleOverrideMatchType.self, forKey: .matchType)
+        pattern = try c.decode(String.self, forKey: .pattern)
+        replacement = try c.decode(String.self, forKey: .replacement)
+    }
 }

@@ -5,7 +5,7 @@ class TitleOverridesView: NSScrollView {
         self.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         borderType = .bezelBorder
-        hasHorizontalScroller = false
+        hasHorizontalScroller = true
         hasVerticalScroller = true
         documentView = TitleOverridesTableView(nil)
         fit(500, 378)
@@ -49,6 +49,19 @@ class TitleOverridesTableView: NSTableView {
             removeRows(at: selectedRowIndexes)
             savePreferences()
         }
+    }
+
+    func moveSelectedRow(by step: Int) {
+        guard numberOfSelectedRows == 1, let source = selectedRowIndexes.first else { return }
+        let dest = source + step
+        guard dest >= 0 && dest < items.count else { return }
+        let moved = items.remove(at: source)
+        items.insert(moved, at: dest)
+        beginUpdates()
+        moveRow(at: source, to: dest)
+        endUpdates()
+        selectRowIndexes(IndexSet(integer: dest), byExtendingSelection: false)
+        savePreferences()
     }
 
     private func addHeaders(_ columnHeaders: [String]) {

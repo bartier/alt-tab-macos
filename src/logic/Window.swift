@@ -218,7 +218,7 @@ class Window {
         return application.displayName
     }
 
-    // applies the first matching user-defined override rule to the raw title;
+    // applies the first matching user-defined override rule (by table order);
     // returns the raw title when no rule matches. Does not mutate `title`.
     func displayTitle() -> String {
         let raw = title ?? ""

@@ -3,17 +3,25 @@ import Cocoa
 class TitleOverridesTab {
     static func initTab() -> NSView {
         let overrides = TitleOverridesView()
-        let add = NSSegmentedControl(images: [NSImage(named: NSImage.addTemplateName)!, NSImage(named: NSImage.removeTemplateName)!], trackingMode: .momentary, target: nil, action: nil)
-        add.onAction = {
+        let segmented = NSSegmentedControl()
+        segmented.segmentCount = 4
+        segmented.trackingMode = .momentary
+        segmented.setImage(NSImage(named: NSImage.addTemplateName)!, forSegment: 0)
+        segmented.setImage(NSImage(named: NSImage.removeTemplateName)!, forSegment: 1)
+        segmented.setLabel("↑", forSegment: 2)
+        segmented.setLabel("↓", forSegment: 3)
+        segmented.onAction = {
             let tableView = overrides.documentView as! TitleOverridesTableView
-            if ($0 as! NSSegmentedControl).selectedSegment == 0 {
-                tableView.insertRow()
-            } else {
-                tableView.removeSelectedRows()
+            switch ($0 as! NSSegmentedControl).selectedSegment {
+                case 0: tableView.insertRow()
+                case 1: tableView.removeSelectedRows()
+                case 2: tableView.moveSelectedRow(by: -1)
+                case 3: tableView.moveSelectedRow(by: 1)
+                default: break
             }
         }
         let table = TableGroupView(width: PreferencesWindow.width)
-        _ = table.addRow(leftViews: [overrides], secondaryViews: [add])
+        _ = table.addRow(leftViews: [overrides], secondaryViews: [segmented])
         let view = TableGroupSetView(originalViews: [table])
         view.translatesAutoresizingMaskIntoConstraints = false
         view.widthAnchor.constraint(equalToConstant: view.fittingSize.width).isActive = true

@@ -219,8 +219,8 @@ class Window {
     }
 
     // applies the first matching user-defined override rule (by table order);
-    // returns the raw title when no rule matches. Does not mutate `title`.
-    func displayTitle() -> String {
+    // returns nil when no rule matches. Does not mutate `title`.
+    private func matchedReplacement() -> String? {
         let raw = title ?? ""
         let appId = application.bundleIdentifier ?? ""
         for rule in Preferences.titleOverrides where !rule.pattern.isEmpty {
@@ -233,7 +233,22 @@ class Window {
             }
             if hit { return rule.replacement }
         }
-        return raw
+        return nil
+    }
+
+    // applies the first matching user-defined override rule to the raw title;
+    // when multiple visible windows resolve to the same replacement, appends a
+    // bounded prefix of the raw title so each cell stays distinguishable.
+    func displayTitle() -> String {
+        let raw = title ?? ""
+        guard let replacement = matchedReplacement() else { return raw }
+        let hasSibling = Windows.list.contains { other in
+            other !== self && other.shouldShowTheUser && other.matchedReplacement() == replacement
+        }
+        guard hasSibling else { return replacement }
+        let maxPrefixLen = 30
+        let prefix = raw.count > maxPrefixLen ? String(raw.prefix(maxPrefixLen)) + "…" : raw
+        return "\(replacement): \(prefix)"
     }
 
     /// window may not be visible on that screen (e.g. the window is not on the current Space)

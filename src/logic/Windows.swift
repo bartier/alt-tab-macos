@@ -51,7 +51,11 @@ class Windows {
         // the highlight jump onto whatever happens to land at the old index
         let pinnedFocused = list.indices.contains(focusedWindowIndex) ? list[focusedWindowIndex] : nil
         let pinnedHovered = hoveredWindowIndex.flatMap { list.indices.contains($0) ? list[$0] : nil }
-        list.sort {
+        // sort a local copy so the comparator can safely read `Windows.list`
+        // (e.g. `displayTitle()` looks at siblings) without Swift trapping on
+        // simultaneous exclusive + shared access to the static array.
+        var sorted = list
+        sorted.sort {
             // separate buckets for these types of windows
             if $0.isWindowlessApp != $1.isWindowlessApp {
                 return $1.isWindowlessApp
@@ -93,6 +97,7 @@ class Windows {
             }
             return order == .orderedAscending
         }
+        list = sorted
         if let pinnedFocused, let i = list.firstIndex(where: { $0 === pinnedFocused }) {
             focusedWindowIndex = i
         }

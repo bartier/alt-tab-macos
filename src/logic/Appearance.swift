@@ -37,6 +37,9 @@ class Appearance {
 
     // derived
     static var font: NSFont { NSFont.systemFont(ofSize: fontHeight) }
+    static var spaceIconSize: CGFloat { (fontHeight * 1.6).rounded() }
+    static var spaceLegendChipFontSize: CGFloat { (fontHeight * 0.95).rounded() }
+    static var spaceLegendDotSize: CGFloat { (fontHeight * 1.0).rounded() }
 
     private static var currentStyle: AppearanceStylePreference { Preferences.appearanceStyle }
     private static var currentSize: AppearanceSizePreference { Preferences.appearanceSize }

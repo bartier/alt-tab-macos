@@ -51,6 +51,10 @@ class ThumbnailFontIconView: ThumbnailTitleView {
         replaceCharIfNeeded(Symbols.filledCircledStar.rawValue)
     }
 
+    func setFilledCircle() {
+        replaceCharIfNeeded(Symbols.filledCircled.rawValue)
+    }
+
     private func replaceCharIfNeeded(_ newChar: String) {
         if newChar != attributedStringValue.string {
             initialAttributedString.replaceCharacters(in: NSRange(location: 0, length: 1), with: newChar)
@@ -80,5 +84,27 @@ class ThumbnailFilledFontIconView: NSView {
         backgroundView.topAnchor.constraint(equalTo: thumbnailFontIconView.topAnchor, constant: offset).isActive = true
         widthAnchor.constraint(equalTo: thumbnailFontIconView.widthAnchor).isActive = true
         heightAnchor.constraint(equalTo: thumbnailFontIconView.heightAnchor).isActive = true
+    }
+}
+
+class SpaceColors {
+    // Ordered for high contrast between adjacent indexes (Space 1 vs 2 vs 3 most often seen together).
+    // NSColor.system* values automatically adapt to light/dark appearance; the others are fixed sRGB.
+    static let palette: [NSColor] = [
+        .systemBlue,
+        .systemOrange,
+        .systemGreen,
+        .systemRed,
+        .systemPurple,
+        .systemYellow,
+        .systemPink,
+        .systemTeal,
+        NSColor(srgbRed: 0.345, green: 0.337, blue: 0.839, alpha: 1), // indigo
+        NSColor(srgbRed: 0.635, green: 0.518, blue: 0.369, alpha: 1), // brown
+    ]
+
+    static func color(forSpaceIndex spaceIndex: Int) -> NSColor {
+        let normalized = max(1, spaceIndex) - 1
+        return palette[normalized % palette.count]
     }
 }

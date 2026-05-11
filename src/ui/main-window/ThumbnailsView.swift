@@ -2,6 +2,7 @@ import Cocoa
 
 class ThumbnailsView: NSVisualEffectView {
     let scrollView = ScrollView()
+    let spaceLegendView = SpaceLegendView()
     static var recycledViews = [ThumbnailView]()
     var rows = [[ThumbnailView]]()
     static var thumbnailsWidth = CGFloat(0.0)
@@ -14,6 +15,7 @@ class ThumbnailsView: NSVisualEffectView {
         state = .active
         wantsLayer = true
         updateRoundedCorners(Appearance.windowCornerRadius)
+        addSubview(spaceLegendView)
         addSubview(scrollView)
         // TODO: think about this optimization more
         (1...20).forEach { _ in ThumbnailsView.recycledViews.append(ThumbnailView()) }
@@ -104,6 +106,7 @@ class ThumbnailsView: NSVisualEffectView {
 
     func updateItemsAndLayout() {
         let widthMax = ThumbnailsPanel.maxThumbnailsWidth().rounded()
+        spaceLegendView.refresh()
         if let (maxX, maxY, labelHeight) = layoutThumbnailViews(widthMax) {
             layoutParentViews(maxX, widthMax, maxY, labelHeight)
             if Preferences.alignThumbnails == .center {
@@ -182,8 +185,10 @@ class ThumbnailsView: NSVisualEffectView {
         let heightMax = ThumbnailsPanel.maxThumbnailsHeight()
         ThumbnailsView.thumbnailsWidth = min(maxX, widthMax)
         ThumbnailsView.thumbnailsHeight = min(maxY, heightMax)
+        let legendHeight = spaceLegendView.isHidden ? 0 : spaceLegendView.preferredHeight
+        let legendGap = spaceLegendView.isHidden ? 0 : Appearance.intraCellPadding
         let frameWidth = ThumbnailsView.thumbnailsWidth + Appearance.windowPadding * 2
-        var frameHeight = ThumbnailsView.thumbnailsHeight + Appearance.windowPadding * 2
+        var frameHeight = ThumbnailsView.thumbnailsHeight + Appearance.windowPadding * 2 + legendHeight + legendGap
         let originX = Appearance.windowPadding
         var originY = Appearance.windowPadding
         if Preferences.appearanceStyle == .appIcons {
@@ -192,6 +197,10 @@ class ThumbnailsView: NSVisualEffectView {
             originY = originY - Appearance.intraCellPadding - labelHeight
         }
         frame.size = NSSize(width: frameWidth, height: frameHeight)
+        // ThumbnailsView is not flipped: y=0 is bottom, so the legend goes near the top of the frame.
+        spaceLegendView.frame = NSRect(x: Appearance.windowPadding,
+            y: frameHeight - Appearance.windowPadding - legendHeight,
+            width: ThumbnailsView.thumbnailsWidth, height: legendHeight)
         scrollView.frame.size = NSSize(width: min(maxX, widthMax), height: min(maxY, heightMax))
         scrollView.frame.origin = CGPoint(x: originX, y: originY)
         scrollView.contentView.frame.size = scrollView.frame.size
@@ -355,6 +364,91 @@ class ScrollView: NSScrollView {
 
 class FlippedView: NSView {
     override var isFlipped: Bool { true }
+}
+
+class SpaceLegendView: NSView {
+    private let stackView = NSStackView()
+
+    var preferredHeight: CGFloat {
+        return Appearance.spaceLegendDotSize + 8
+    }
+
+    convenience init() {
+        self.init(frame: .zero)
+        wantsLayer = true
+        stackView.orientation = .horizontal
+        stackView.alignment = .centerY
+        stackView.spacing = 12
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stackView)
+        NSLayoutConstraint.activate([
+            stackView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            stackView.centerXAnchor.constraint(equalTo: centerXAnchor),
+            stackView.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor),
+            stackView.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
+        ])
+    }
+
+    func refresh() {
+        let hideForSingleSpace = Spaces.isSingleSpace()
+        let hideForPreference = Preferences.hideSpaceNumberLabels
+        let hideForStyle = Preferences.appearanceStyle == .appIcons
+        if hideForSingleSpace || hideForPreference || hideForStyle {
+            isHidden = true
+            return
+        }
+        let uniqueSpaceIndexes = Set(
+            Windows.list
+                .filter { $0.shouldShowTheUser && !$0.isOnAllSpaces }
+                .compactMap { $0.spaceIndexes.first }
+                .filter { $0 <= 30 }
+        ).sorted()
+        if uniqueSpaceIndexes.isEmpty {
+            isHidden = true
+            return
+        }
+        isHidden = false
+        stackView.setViews(uniqueSpaceIndexes.map { makeChip(for: $0) }, in: .leading)
+    }
+
+    private func makeChip(for spaceIndex: Int) -> NSView {
+        let chip = NSStackView()
+        chip.orientation = .horizontal
+        chip.alignment = .centerY
+        chip.spacing = 5
+        let dot = SpaceLegendDotView(color: SpaceColors.color(forSpaceIndex: spaceIndex),
+            diameter: Appearance.spaceLegendDotSize)
+        let label = NSTextField(labelWithString: String(format: NSLocalizedString("Space %d", comment: ""), spaceIndex))
+        label.font = NSFont.systemFont(ofSize: Appearance.spaceLegendChipFontSize, weight: .medium)
+        label.textColor = Appearance.fontColor
+        label.isEditable = false
+        label.isBordered = false
+        label.drawsBackground = false
+        chip.addArrangedSubview(dot)
+        chip.addArrangedSubview(label)
+        return chip
+    }
+}
+
+class SpaceLegendDotView: NSView {
+    private let color: NSColor
+
+    init(color: NSColor, diameter: CGFloat) {
+        self.color = color
+        super.init(frame: NSRect(x: 0, y: 0, width: diameter, height: diameter))
+        translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            widthAnchor.constraint(equalToConstant: diameter),
+            heightAnchor.constraint(equalToConstant: diameter),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func draw(_ dirtyRect: NSRect) {
+        color.setFill()
+        NSBezierPath(ovalIn: bounds).fill()
+    }
 }
 
 enum Direction {

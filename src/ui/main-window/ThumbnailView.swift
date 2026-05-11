@@ -11,7 +11,7 @@ class ThumbnailView: FlippedView {
     var fullscreenIcon = ThumbnailFontIconView(symbol: .circledPlusSign, tooltip: NSLocalizedString("Window is fullscreen", comment: ""))
     var minimizedIcon = ThumbnailFontIconView(symbol: .circledMinusSign, tooltip: NSLocalizedString("Window is minimized", comment: ""))
     var hiddenIcon = ThumbnailFontIconView(symbol: .circledSlashSign, tooltip: NSLocalizedString("App is hidden", comment: ""))
-    var spaceIcon = ThumbnailFontIconView(symbol: .circledNumber0)
+    var spaceIcon = ThumbnailFontIconView(symbol: .filledCircled, size: Appearance.spaceIconSize, shadow: nil)
     var dockLabelIcon = ThumbnailFilledFontIconView(
         ThumbnailFontIconView(symbol: .filledCircledNumber0, size: dockLabelLabelSize(), color: NSColor(srgbRed: 1, green: 0.30, blue: 0.25, alpha: 1), shadow: nil),
         backgroundColor: NSColor.white, size: dockLabelLabelSize())
@@ -354,10 +354,12 @@ class ThumbnailView: FlippedView {
         if !spaceIcon.isHidden {
             let spaceIndex = element.spaceIndexes.first
             if element.isOnAllSpaces || (spaceIndex != nil && spaceIndex! > 30) {
-                spaceIcon.setStar()
+                spaceIcon.setFilledStar()
+                spaceIcon.textColor = Appearance.fontColor
                 spaceIcon.toolTip = NSLocalizedString("Window is on every Space", comment: "")
             } else if let spaceIndex {
-                spaceIcon.setNumber(spaceIndex, false)
+                spaceIcon.setFilledCircle()
+                spaceIcon.textColor = SpaceColors.color(forSpaceIndex: spaceIndex)
                 spaceIcon.toolTip = String(format: NSLocalizedString("Window is on Space %d", comment: ""), spaceIndex)
             }
         }
@@ -397,10 +399,10 @@ class ThumbnailView: FlippedView {
             appIcon.frame.origin.x = App.shared.userInterfaceLayoutDirection == .leftToRight
                 ? 0
                 : hStackView.frame.width - appIcon.frame.width
-            let iconWidth = windowIndicatorIcons.first!.cell!.cellSize.width
             var indicatorSpace = CGFloat(0)
             for icon in windowIndicatorIcons {
                 if !icon.isHidden {
+                    let iconWidth = icon.cell!.cellSize.width
                     indicatorSpace += iconWidth
                     icon.centerFrameInParent(y: true)
                     icon.frame.origin.x = App.shared.userInterfaceLayoutDirection == .leftToRight
@@ -447,8 +449,9 @@ class ThumbnailView: FlippedView {
     }
 
     private func indicatorsSpace() -> CGFloat {
-        let iconWidth = windowIndicatorIcons.first!.cell!.cellSize.width
-        return CGFloat(windowIndicatorIcons.filter { !$0.isHidden }.count) * iconWidth
+        return windowIndicatorIcons
+            .filter { !$0.isHidden }
+            .reduce(CGFloat(0)) { $0 + $1.cell!.cellSize.width }
     }
 
     private func getAppOrAndWindowTitle() -> String {

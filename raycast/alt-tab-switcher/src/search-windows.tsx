@@ -4,12 +4,14 @@ import {
   closeMainWindow,
   getPreferenceValues,
   Icon,
+  LaunchProps,
   List,
   popToRoot,
   showToast,
   Toast,
 } from "@raycast/api";
 import { useExec } from "@raycast/utils";
+import { useState } from "react";
 import { execFile } from "child_process";
 import { join } from "path";
 import { promisify } from "util";
@@ -50,13 +52,21 @@ async function focusWindow(window: AltTabWindow) {
   }
 }
 
-export default function Command() {
+export default function Command(props: LaunchProps) {
+  // pre-fill the search when launched as a fallback command, so a query typed
+  // at Raycast root search lands here already filtering the window list
+  const [searchText, setSearchText] = useState(props.fallbackText ?? "");
   const { isLoading, data, error } = useExec(binary, [`--list=${prefs.shortcutIndex}`], {
     parseOutput: ({ stdout }) => JSON.parse(String(stdout)).windows as AltTabWindow[],
   });
 
   return (
-    <List isLoading={isLoading} searchBarPlaceholder="Search windows…">
+    <List
+      isLoading={isLoading}
+      searchText={searchText}
+      onSearchTextChange={setSearchText}
+      searchBarPlaceholder="Search windows…"
+    >
       {error ? (
         <List.EmptyView
           icon={Icon.ExclamationMark}

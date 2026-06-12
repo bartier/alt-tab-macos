@@ -63,6 +63,7 @@ export default function Command(props: LaunchProps) {
   return (
     <List
       isLoading={isLoading}
+      filtering={true}
       searchText={searchText}
       onSearchTextChange={setSearchText}
       searchBarPlaceholder="Search windows…"

@@ -55,48 +55,7 @@ class Windows {
         // (e.g. `displayTitle()` looks at siblings) without Swift trapping on
         // simultaneous exclusive + shared access to the static array.
         var sorted = list
-        sorted.sort {
-            // separate buckets for these types of windows
-            if $0.isWindowlessApp != $1.isWindowlessApp {
-                return $1.isWindowlessApp
-            }
-            if Preferences.showHiddenWindows[App.app.shortcutIndex] == .showAtTheEnd && $0.isHidden != $1.isHidden {
-                return $1.isHidden
-            }
-            if Preferences.showMinimizedWindows[App.app.shortcutIndex] == .showAtTheEnd && $0.isMinimized != $1.isMinimized {
-                return $1.isMinimized
-            }
-            // sort within each buckets
-            let sortType = Preferences.windowOrder[App.app.shortcutIndex]
-            if sortType == .recentlyFocused {
-                return $0.lastFocusOrder < $1.lastFocusOrder
-            }
-            if sortType == .recentlyCreated {
-                return $1.creationOrder < $0.creationOrder
-            }
-            var order = ComparisonResult.orderedSame
-            if sortType == .alphabetical {
-                order = compareByAppNameThenWindowTitle($0, $1)
-            }
-            if sortType == .space {
-                if $0.isOnAllSpaces && $1.isOnAllSpaces {
-                    order = .orderedSame
-                } else if $0.isOnAllSpaces {
-                    order = .orderedAscending
-                } else if $1.isOnAllSpaces {
-                    order = .orderedDescending
-                } else if let spaceIndex0 = $0.spaceIndexes.first, let spaceIndex1 = $1.spaceIndexes.first {
-                    order = spaceIndex0.compare(spaceIndex1)
-                }
-                if order == .orderedSame {
-                    order = compareByAppNameThenWindowTitle($0, $1)
-                }
-            }
-            if order == .orderedSame {
-                order = $0.lastFocusOrder.compare($1.lastFocusOrder)
-            }
-            return order == .orderedAscending
-        }
+        sorted.sort { isSortedBefore($0, $1, App.app.shortcutIndex) }
         list = sorted
         if let pinnedFocused, let i = list.firstIndex(where: { $0 === pinnedFocused }) {
             focusedWindowIndex = i
@@ -104,6 +63,51 @@ class Windows {
         if let pinnedHovered, let i = list.firstIndex(where: { $0 === pinnedHovered }) {
             hoveredWindowIndex = i
         }
+    }
+
+    /// ordering comparator for a given shortcut index; reads no mutable UI state,
+    /// so it can also order copies of the list for other indexes (e.g. CLI queries)
+    static func isSortedBefore(_ w0: Window, _ w1: Window, _ shortcutIndex: Int) -> Bool {
+        // separate buckets for these types of windows
+        if w0.isWindowlessApp != w1.isWindowlessApp {
+            return w1.isWindowlessApp
+        }
+        if Preferences.showHiddenWindows[shortcutIndex] == .showAtTheEnd && w0.isHidden != w1.isHidden {
+            return w1.isHidden
+        }
+        if Preferences.showMinimizedWindows[shortcutIndex] == .showAtTheEnd && w0.isMinimized != w1.isMinimized {
+            return w1.isMinimized
+        }
+        // sort within each buckets
+        let sortType = Preferences.windowOrder[shortcutIndex]
+        if sortType == .recentlyFocused {
+            return w0.lastFocusOrder < w1.lastFocusOrder
+        }
+        if sortType == .recentlyCreated {
+            return w1.creationOrder < w0.creationOrder
+        }
+        var order = ComparisonResult.orderedSame
+        if sortType == .alphabetical {
+            order = compareByAppNameThenWindowTitle(w0, w1)
+        }
+        if sortType == .space {
+            if w0.isOnAllSpaces && w1.isOnAllSpaces {
+                order = .orderedSame
+            } else if w0.isOnAllSpaces {
+                order = .orderedAscending
+            } else if w1.isOnAllSpaces {
+                order = .orderedDescending
+            } else if let spaceIndex0 = w0.spaceIndexes.first, let spaceIndex1 = w1.spaceIndexes.first {
+                order = spaceIndex0.compare(spaceIndex1)
+            }
+            if order == .orderedSame {
+                order = compareByAppNameThenWindowTitle(w0, w1)
+            }
+        }
+        if order == .orderedSame {
+            order = w0.lastFocusOrder.compare(w1.lastFocusOrder)
+        }
+        return order == .orderedAscending
     }
 
     static func updateIsFullscreenOnCurrentSpace() {
@@ -354,6 +358,20 @@ class Windows {
         return true
     }
 
+    /// lightweight refresh of Space and tab state for all windows; same per-trigger work
+    /// updatesBeforeShowing() does, without touching shouldShowTheUser/sort/UI state.
+    /// Used by CLI queries since Space data can be stale when the switcher hasn't been shown
+    static func updateSpacesAndTabsState() {
+        Spaces.refresh()
+        let spaceIdsAndIndexes = Spaces.idsAndIndexes.map { $0.0 }
+        lazy var cgsWindowIds = Spaces.windowsInSpaces(spaceIdsAndIndexes)
+        lazy var visibleCgsWindowIds = Spaces.windowsInSpaces(spaceIdsAndIndexes, false)
+        for window in list {
+            detectTabbedWindows(window, cgsWindowIds, visibleCgsWindowIds)
+            updatesWindowSpace(window)
+        }
+    }
+
     static func updatesWindowSpace(_ window: Window) {
         // macOS bug: if you tab a window, then move the tab group to another space, other tabs from the tab group will stay on the current space
         // you can use the Dock to focus one of the other tabs and it will teleport that tab in the current space, proving that it's a macOS bug
@@ -410,7 +428,13 @@ class Windows {
     }
 
     private static func refreshIfWindowShouldBeShownToTheUser(_ window: Window, _ activePidSnapshot: pid_t?) {
-        window.shouldShowTheUser =
+        window.shouldShowTheUser = isWindowShownToTheUser(window, activePidSnapshot, App.app.shortcutIndex)
+    }
+
+    /// pure predicate: doesn't mutate any window/UI state, so it can be evaluated
+    /// for an arbitrary shortcut index (e.g. CLI queries) without affecting the open switcher
+    static func isWindowShownToTheUser(_ window: Window, _ activePidSnapshot: pid_t?, _ shortcutIndex: Int) -> Bool {
+        return
             !(window.application.bundleIdentifier.flatMap { id in
                 Preferences.blacklist.contains {
                     id.hasPrefix($0.bundleIdentifier) &&
@@ -418,18 +442,18 @@ class Windows {
                 }
             } ?? false) &&
             {
-                if Preferences.appsToShow[App.app.shortcutIndex] == .active {
+                if Preferences.appsToShow[shortcutIndex] == .active {
                     return window.application.pid == activePidSnapshot
                 }
                 return true
             }() &&
-            !(!(Preferences.showHiddenWindows[App.app.shortcutIndex] != .hide) && window.isHidden) &&
+            !(!(Preferences.showHiddenWindows[shortcutIndex] != .hide) && window.isHidden) &&
             ((!Preferences.hideWindowlessApps && window.isWindowlessApp) ||
                 !window.isWindowlessApp &&
-                !(!(Preferences.showFullscreenWindows[App.app.shortcutIndex] != .hide) && window.isFullscreen) &&
-                !(!(Preferences.showMinimizedWindows[App.app.shortcutIndex] != .hide) && window.isMinimized) &&
-                !(Preferences.spacesToShow[App.app.shortcutIndex] == .visible && !Spaces.visibleSpaces.contains { visibleSpace in window.spaceIds.contains { $0 == visibleSpace } }) &&
-                !(Preferences.screensToShow[App.app.shortcutIndex] == .showingAltTab && !window.isOnScreen(NSScreen.preferred)) &&
+                !(!(Preferences.showFullscreenWindows[shortcutIndex] != .hide) && window.isFullscreen) &&
+                !(!(Preferences.showMinimizedWindows[shortcutIndex] != .hide) && window.isMinimized) &&
+                !(Preferences.spacesToShow[shortcutIndex] == .visible && !Spaces.visibleSpaces.contains { visibleSpace in window.spaceIds.contains { $0 == visibleSpace } }) &&
+                !(Preferences.screensToShow[shortcutIndex] == .showingAltTab && !window.isOnScreen(NSScreen.preferred)) &&
                 (Preferences.showTabsAsWindows || !window.isTabbed))
     }
 
@@ -522,7 +546,7 @@ class Windows {
 
     private static func isIgnoredTransientApp(_ pid: pid_t) -> Bool {
         guard let running = NSRunningApplication(processIdentifier: pid), let id = running.bundleIdentifier else { return false }
-        return id == "com.runningwithcrayons.Alfred" || id == "com.apple.Spotlight"
+        return id == "com.runningwithcrayons.Alfred" || id == "com.apple.Spotlight" || id == "com.raycast.macos"
     }
 
     private static func spinWait(milliseconds: Int) {

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "alt-tab-switcher",
+  "title": "AltTab Switcher",
+  "description": "Search AltTab's window list and focus a window",
+  "icon": "icon.png",
+  "author": "vitor",
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "search-windows",
+      "title": "Search AltTab Windows",
+      "description": "List the windows of an AltTab shortcut and focus the selected one",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "shortcutIndex",
+      "type": "dropdown",
+      "required": false,
+      "title": "AltTab Shortcut",
+      "description": "Which AltTab shortcut's window list to show (its filters and ordering apply). Enable 'Raycast integration' for it in AltTab Preferences > Controls.",
+      "default": "1",
+      "data": [
+        { "title": "Shortcut 1", "value": "1" },
+        { "title": "Shortcut 2", "value": "2" },
+        { "title": "Shortcut 3", "value": "3" },
+        { "title": "Shortcut 4", "value": "4" }
+      ]
+    },
+    {
+      "name": "altTabPath",
+      "type": "textfield",
+      "required": false,
+      "title": "AltTab.app Path",
+      "description": "Path to the AltTab app bundle",
+      "default": "/Applications/AltTab.app"
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.88.4",
+    "@raycast/utils": "^1.18.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.8.10",
+    "@types/react": "^19.0.10",
+    "typescript": "^5.4.5"
+  },
+  "scripts": {
+    "dev": "ray develop",
+    "build": "ray build -e dist",
+    "lint": "ray lint"
+  }
+}

@@ -201,6 +201,12 @@ class ControlsTab {
             rightViews: [ windowOrder ]
           )
         )
+        table.addRow(
+          TableGroupView.Row(
+            leftTitle: NSLocalizedString("Raycast integration", comment: ""),
+            rightViews: [ LabelAndControl.makeSwitch(Preferences.indexToName("raycastIntegration", index)) ]
+          )
+        )
 
         table.fit()
         return table

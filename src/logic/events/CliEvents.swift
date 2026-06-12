@@ -45,6 +45,34 @@ class CliServer {
                 )
                 return
             }
+            if rawValue.hasPrefix("--list=") {
+                if let shortcutNumber = Int(rawValue.dropFirst("--list=".count)),
+                   (1...4).contains(shortcutNumber),
+                   Preferences.raycastIntegration[shortcutNumber - 1] {
+                    let index = shortcutNumber - 1
+                    Windows.updateSpacesAndTabsState()
+                    let activePid = Preferences.appsToShow[index] == .active ? Windows.resolveActivePid() : nil
+                    let windows = Windows.list
+                        .filter { !$0.isWindowlessApp && Windows.isWindowShownToTheUser($0, activePid, index) }
+                        .sorted { Windows.isSortedBefore($0, $1, index) }
+                    output = JsonOutput(windows: windows.map {
+                        JsonWindow(
+                            id: $0.cgWindowId,
+                            title: $0.displayTitle(),
+                            appName: $0.application.displayName,
+                            bundleId: $0.application.bundleIdentifier,
+                            appPath: $0.application.bundleURL?.path,
+                            spaceIndex: $0.spaceIndexes.first,
+                            isMinimized: $0.isMinimized,
+                            isHidden: $0.isHidden,
+                            lastFocusOrder: $0.lastFocusOrder
+                        )
+                    })
+                    return
+                }
+                output = error
+                return
+            }
             if rawValue.hasPrefix("--focus=") {
                 if let id = CGWindowID(rawValue.dropFirst("--focus=".count)),
                    let window = (Windows.list.first { $0.cgWindowId == id }) {
@@ -66,13 +94,34 @@ struct JsonOutput: Codable {
 struct JsonWindow: Codable {
     var id: CGWindowID?
     var title: String
+    // extra fields returned by --list=<shortcut>; nil (thus absent) for plain --list to keep its output unchanged
+    var appName: String? = nil
+    var bundleId: String? = nil
+    var appPath: String? = nil
+    var spaceIndex: Int? = nil
+    var isMinimized: Bool? = nil
+    var isHidden: Bool? = nil
+    var lastFocusOrder: Int? = nil
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(title, forKey: .title)
+        try container.encodeIfPresent(appName, forKey: .appName)
+        try container.encodeIfPresent(bundleId, forKey: .bundleId)
+        try container.encodeIfPresent(appPath, forKey: .appPath)
+        try container.encodeIfPresent(spaceIndex, forKey: .spaceIndex)
+        try container.encodeIfPresent(isMinimized, forKey: .isMinimized)
+        try container.encodeIfPresent(isHidden, forKey: .isHidden)
+        try container.encodeIfPresent(lastFocusOrder, forKey: .lastFocusOrder)
+    }
 }
 
 class CliClient {
     static func detectCommand() -> String? {
         let args = CommandLine.arguments
         if args.count == 2 && !args[1].starts(with: "--logs=") {
-            if args[1] == "--list" || args[1].hasPrefix("--focus=") {
+            if args[1] == "--list" || args[1].hasPrefix("--list=") || args[1].hasPrefix("--focus=") {
                 return args[1]
             }
         }

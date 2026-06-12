@@ -15,3 +15,6 @@ codesign.p12
 # BMAD (local only)
 .bmad-core/
 .bmad-*/
+# Raycast extension
+raycast/alt-tab-switcher/node_modules/
+raycast/alt-tab-switcher/dist/

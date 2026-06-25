@@ -11,6 +11,29 @@ class KeyboardEvents {
     static var hotKeyPressedEventHandler: EventHandlerRef?
     static var hotKeyReleasedEventHandler: EventHandlerRef?
     static var globalShortcutsAreDisabled = false
+    // keyCodes of the "when active" local shortcuts (e.g. ESC, W, M, arrows). While the switcher is
+    // open, AltTab is a non-activating background panel, so macOS routes Command-modified key events
+    // to the active app instead of our local NSEvent monitor. We catch these keys in the CGEvent tap
+    // (system-wide) so they work regardless of the held modifier. Accessed from the keyboard-events
+    // background thread, hence the lock.
+    private static var activeLocalShortcutKeyCodes = Set<UInt32>()
+    private static let activeLocalShortcutKeyCodesLock = NSLock()
+
+    static func refreshActiveLocalShortcutKeyCodes() {
+        var keyCodes = Set<UInt32>()
+        for atShortcut in ControlsTab.shortcuts.values where atShortcut.scope == .local && atShortcut.shortcut.keyCode != .none {
+            keyCodes.insert(atShortcut.shortcut.carbonKeyCode)
+        }
+        activeLocalShortcutKeyCodesLock.lock()
+        activeLocalShortcutKeyCodes = keyCodes
+        activeLocalShortcutKeyCodesLock.unlock()
+    }
+
+    static func isActiveLocalShortcutKeyCode(_ keyCode: UInt32) -> Bool {
+        activeLocalShortcutKeyCodesLock.lock()
+        defer { activeLocalShortcutKeyCodesLock.unlock() }
+        return activeLocalShortcutKeyCodes.contains(keyCode)
+    }
 
     static func addGlobalShortcut(_ controlId: String, _ shortcut: Shortcut) {
         addGlobalHandlerIfNeeded(shortcut)
@@ -57,7 +80,7 @@ class KeyboardEvents {
 
     static func addEventHandlers() {
         addLocalMonitorForKeyDownAndKeyUp()
-        addCgEventTapForModifierFlags()
+        addCgEventTap()
     }
 
     // TODO: handle this on a background thread?
@@ -68,16 +91,19 @@ class KeyboardEvents {
         }
     }
 
-    private static func addCgEventTapForModifierFlags() {
-        let eventMask = [CGEventType.flagsChanged].reduce(CGEventMask(0), { $0 | (1 << $1.rawValue) })
+    private static func addCgEventTap() {
+        // .keyDown is needed in addition to the local NSEvent monitor: while the switcher is open,
+        // AltTab is a non-activating background panel, so Command-modified key events (e.g. ESC while
+        // holding ⌘ for Cmd+Tab) are routed by macOS to the active app and never reach the monitor
+        let eventMask = [CGEventType.keyDown, CGEventType.flagsChanged].reduce(CGEventMask(0), { $0 | (1 << $1.rawValue) })
         // CGEvent.tapCreate returns null if ensureAccessibilityCheckboxIsChecked() didn't pass
-        // CGEvent.tapCreate is unaffected by SecureInput for .flagsChanged
+        // CGEvent.tapCreate is unaffected by SecureInput for .flagsChanged (but .keyDown is blocked under SecureInput)
         eventTap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
             eventsOfInterest: eventMask,
-            callback: cgEventFlagsChangedHandler,
+            callback: cgEventHandler,
             userInfo: nil)
         if let eventTap {
             let runLoopSource = CFMachPortCreateRunLoopSource(nil, eventTap, 0)
@@ -120,8 +146,24 @@ class KeyboardEvents {
     }
 }
 
-fileprivate let cgEventFlagsChangedHandler: CGEventTapCallBack = { _, type, cgEvent, _ in
-    if type == .flagsChanged {
+fileprivate let cgEventHandler: CGEventTapCallBack = { _, type, cgEvent, _ in
+    if type == .keyDown {
+        // Only act while the switcher is open, and only for keys bound to "when active" local shortcuts.
+        // This lets the trigger key (a global hotkey) and unrelated keys pass through untouched, while
+        // making ESC/W/M/arrows/etc. work even when a Command-based shortcut (e.g. Cmd+Tab) is held.
+        if App.app.appIsBeingUsed {
+            let keyCode = UInt32(cgEvent.getIntegerValueField(.keyboardEventKeycode))
+            if KeyboardEvents.isActiveLocalShortcutKeyCode(keyCode) {
+                let modifiers = NSEvent.ModifierFlags(rawValue: UInt(cgEvent.flags.rawValue))
+                let isARepeat = cgEvent.getIntegerValueField(.keyboardEventAutorepeat) != 0
+                DispatchQueue.main.async {
+                    handleKeyboardEvent(nil, nil, keyCode, modifiers, isARepeat)
+                }
+                // consume the event so it doesn't leak to the background app (e.g. ⌘W closing its document)
+                return nil
+            }
+        }
+    } else if type == .flagsChanged {
         // TODO: it would be great to shortcut matching and trigger on the background thread
         // it would enable us to set App.app.isBeingUsed here, and could stop tasks on main when they check the flag
         DispatchQueue.main.async {

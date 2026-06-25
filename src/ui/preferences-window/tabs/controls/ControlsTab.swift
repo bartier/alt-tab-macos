@@ -242,6 +242,7 @@ class ControlsTab {
         if scope == .global {
             KeyboardEvents.addGlobalShortcut(controlId, atShortcut.shortcut)
         }
+        KeyboardEvents.refreshActiveLocalShortcutKeyCodes()
         toggleNativeCommandTabIfNeeded()
     }
 
@@ -392,6 +393,7 @@ class ControlsTab {
                 KeyboardEvents.removeGlobalShortcut(controlId, atShortcut.shortcut)
             }
             shortcuts.removeValue(forKey: controlId)
+            KeyboardEvents.refreshActiveLocalShortcutKeyCodes()
         }
     }
 

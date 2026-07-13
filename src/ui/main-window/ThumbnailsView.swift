@@ -381,11 +381,20 @@ class SpaceLegendView: NSView {
         stackView.spacing = 12
         stackView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stackView)
+        let leadingConstraint = stackView.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor)
+        let trailingConstraint = stackView.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor)
+        // The legend receives its frame through manual layout. During the first layout pass (and briefly
+        // after a reset), that frame can still be zero while the stack already contains fixed-size dots.
+        // Required edge constraints are impossible to satisfy in that transient state and make AppKit
+        // present its purple constraint-debugging window. Keep the final containment behavior without
+        // treating the temporary zero-width frame as a broken layout.
+        leadingConstraint.priority = .defaultHigh
+        trailingConstraint.priority = .defaultHigh
         NSLayoutConstraint.activate([
             stackView.centerYAnchor.constraint(equalTo: centerYAnchor),
             stackView.centerXAnchor.constraint(equalTo: centerXAnchor),
-            stackView.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor),
-            stackView.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
+            leadingConstraint,
+            trailingConstraint,
         ])
     }
 

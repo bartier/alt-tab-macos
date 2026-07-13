@@ -362,6 +362,10 @@ extension App: NSApplicationDelegate {
         Logger.initialize()
         #if DEBUG
         UserDefaults.standard.set(true, forKey: "NSConstraintBasedLayoutVisualizeMutuallyExclusiveConstraints")
+        #else
+        // This diagnostic is persisted in the app's defaults by debug builds. Do not let a previous
+        // debug run enable AppKit's purple constraint visualizer in a production build.
+        UserDefaults.standard.removeObject(forKey: "NSConstraintBasedLayoutVisualizeMutuallyExclusiveConstraints")
         #endif
         #if !DEBUG
         PFMoveToApplicationsFolderIfNecessary()

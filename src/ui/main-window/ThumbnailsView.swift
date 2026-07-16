@@ -187,9 +187,13 @@ class ThumbnailsView: NSVisualEffectView {
         ThumbnailsView.thumbnailsHeight = min(maxY, heightMax)
         let legendHeight = spaceLegendView.isHidden ? 0 : spaceLegendView.preferredHeight
         let legendGap = spaceLegendView.isHidden ? 0 : Appearance.intraCellPadding
-        let frameWidth = ThumbnailsView.thumbnailsWidth + Appearance.windowPadding * 2
+        // the legend can be wider than the thumbnails (e.g. few narrow windows across many Spaces);
+        // the panel must fit whichever is wider, or the legend chips overflow past the panel edges
+        let legendWidth = spaceLegendView.isHidden ? 0 : min(spaceLegendView.fittingWidth.rounded(.up), widthMax)
+        let contentWidth = max(ThumbnailsView.thumbnailsWidth, legendWidth)
+        let frameWidth = contentWidth + Appearance.windowPadding * 2
         var frameHeight = ThumbnailsView.thumbnailsHeight + Appearance.windowPadding * 2 + legendHeight + legendGap
-        let originX = Appearance.windowPadding
+        let originX = Appearance.windowPadding + ((contentWidth - ThumbnailsView.thumbnailsWidth) / 2).rounded()
         var originY = Appearance.windowPadding
         if Preferences.appearanceStyle == .appIcons {
             // If there is title under the icon on the last line, the height of the title needs to be subtracted.
@@ -200,7 +204,7 @@ class ThumbnailsView: NSVisualEffectView {
         // ThumbnailsView is not flipped: y=0 is bottom, so the legend goes near the top of the frame.
         spaceLegendView.frame = NSRect(x: Appearance.windowPadding,
             y: frameHeight - Appearance.windowPadding - legendHeight,
-            width: ThumbnailsView.thumbnailsWidth, height: legendHeight)
+            width: contentWidth, height: legendHeight)
         scrollView.frame.size = NSSize(width: min(maxX, widthMax), height: min(maxY, heightMax))
         scrollView.frame.origin = CGPoint(x: originX, y: originY)
         scrollView.contentView.frame.size = scrollView.frame.size
@@ -373,27 +377,34 @@ class SpaceLegendView: NSView {
         return Appearance.spaceLegendDotSize + 8
     }
 
+    /// width the chips need; the panel is sized to fit this when it exceeds the thumbnails width
+    var fittingWidth: CGFloat {
+        return stackView.fittingSize.width
+    }
+
     convenience init() {
         self.init(frame: .zero)
         wantsLayer = true
+        // the legend receives its frame through manual layout; during transient states (first pass,
+        // reset) the stack can be wider than that frame. Clip so chips never draw outside the panel.
+        layer?.masksToBounds = true
         stackView.orientation = .horizontal
         stackView.alignment = .centerY
         stackView.spacing = 12
         stackView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stackView)
-        let leadingConstraint = stackView.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor)
+        let centerXConstraint = stackView.centerXAnchor.constraint(equalTo: centerXAnchor)
         let trailingConstraint = stackView.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor)
-        // The legend receives its frame through manual layout. During the first layout pass (and briefly
-        // after a reset), that frame can still be zero while the stack already contains fixed-size dots.
-        // Required edge constraints are impossible to satisfy in that transient state and make AppKit
-        // present its purple constraint-debugging window. Keep the final containment behavior without
-        // treating the temporary zero-width frame as a broken layout.
-        leadingConstraint.priority = .defaultHigh
+        // centerX and trailing are optional so a transiently zero-width frame is not a constraint
+        // conflict (which shows AppKit's purple debugging window). Leading stays required: if the
+        // stack ever exceeds the frame, it pins to the leading edge and clips at the trailing edge,
+        // instead of the centered stack pushing the first chips out past the panel's left side.
+        centerXConstraint.priority = .defaultHigh
         trailingConstraint.priority = .defaultHigh
         NSLayoutConstraint.activate([
             stackView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            stackView.centerXAnchor.constraint(equalTo: centerXAnchor),
-            leadingConstraint,
+            centerXConstraint,
+            stackView.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor),
             trailingConstraint,
         ])
     }

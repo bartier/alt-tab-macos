@@ -316,9 +316,29 @@ class CachedUserDefaults {
 }
 
 struct BlacklistEntry: Codable {
+    /// shortcut slots 0-3; slot 3 is shared by Shortcut 4 and the Gesture
+    static let allShortcuts = Array(0...Preferences.gestureIndex)
+
     var bundleIdentifier: String
     var hide: BlacklistHidePreference
     var ignore: BlacklistIgnorePreference
+    /// shortcut slots the hide rule applies to; entries saved before this field existed apply to all
+    var hideIn: [Int]
+
+    init(bundleIdentifier: String, hide: BlacklistHidePreference, ignore: BlacklistIgnorePreference, hideIn: [Int] = BlacklistEntry.allShortcuts) {
+        self.bundleIdentifier = bundleIdentifier
+        self.hide = hide
+        self.ignore = ignore
+        self.hideIn = hideIn
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        bundleIdentifier = try c.decode(String.self, forKey: .bundleIdentifier)
+        hide = try c.decode(BlacklistHidePreference.self, forKey: .hide)
+        ignore = try c.decode(BlacklistIgnorePreference.self, forKey: .ignore)
+        hideIn = try c.decodeIfPresent([Int].self, forKey: .hideIn) ?? BlacklistEntry.allShortcuts
+    }
 }
 
 struct TitleOverrideEntry: Codable {

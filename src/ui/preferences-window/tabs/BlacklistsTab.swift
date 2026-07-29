@@ -21,7 +21,8 @@ class BlacklistsTab {
                 tableView.removeSelectedRows()
             }
         }
-        let table = TableGroupView(width: PreferencesWindow.width)
+        // wider than the standard tab width to fit the "For shortcuts" column
+        let table = TableGroupView(width: 600)
         _ = table.addRow(leftViews: [blacklist], secondaryViews: [add])
         let view = TableGroupSetView(originalViews: [table])
         view.translatesAutoresizingMaskIntoConstraints = false

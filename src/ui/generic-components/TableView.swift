@@ -8,7 +8,7 @@ class BlacklistView: NSScrollView {
         hasHorizontalScroller = false
         hasVerticalScroller = true
         documentView = TableView(nil)
-        fit(500, 378)
+        fit(580, 378)
     }
 }
 
@@ -27,9 +27,11 @@ class TableView: NSTableView {
         allowsMultipleSelection = true
         rowSizeStyle = .medium
         addHeaders([
-            NSLocalizedString("App (BundleID starting with)", comment: ""),
-            String(format: NSLocalizedString("Hide in %@", comment: "%@ is AltTab"), App.name),
-            NSLocalizedString("Ignore shortcuts when active", comment: "")
+            (NSLocalizedString("App (BundleID starting with)", comment: ""), nil, 170),
+            (String(format: NSLocalizedString("Hide in %@", comment: "%@ is AltTab"), App.name), nil, 140),
+            (NSLocalizedString("For shortcuts", comment: ""),
+                NSLocalizedString("Shortcuts for which the “Hide” rule applies. “4” also applies to the Gesture", comment: ""), 100),
+            (NSLocalizedString("Ignore shortcuts when active", comment: ""), nil, nil),
         ])
         reloadData()
     }
@@ -52,13 +54,13 @@ class TableView: NSTableView {
         }
     }
 
-    private func addHeaders(_ columnHeaders: [String]) {
-        columnHeaders.enumerated().forEach { (i, header: String) in
+    private func addHeaders(_ columnHeaders: [(String, String?, CGFloat?)]) {
+        columnHeaders.enumerated().forEach { (i, header: (String, String?, CGFloat?)) in
             let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("col\(i + 1)"))
-            column.headerToolTip = header
-            column.headerCell = TableHeaderCell(header)
-            if i == 0 {
-                column.width = 206
+            column.headerToolTip = header.1 ?? header.0
+            column.headerCell = TableHeaderCell(header.0)
+            if let width = header.2 {
+                column.width = width
             }
             addTableColumn(column)
         }
@@ -70,6 +72,8 @@ class TableView: NSTableView {
             items[row].bundleIdentifier = LabelAndControl.getControlValue(control, nil)!
         } else if colId == "col2" {
             items[row].hide = BlacklistHidePreference.allCases[Int(LabelAndControl.getControlValue(control, nil)!)!]
+            // the scope control is only enabled when the hide rule is active
+            reloadData(forRowIndexes: IndexSet(integer: row), columnIndexes: IndexSet(integer: 2))
         } else {
             items[row].ignore = BlacklistIgnorePreference.allCases[Int(LabelAndControl.getControlValue(control, nil)!)!]
         }
@@ -113,6 +117,33 @@ class TableView: NSTableView {
         button.widthAnchor.constraint(equalTo: parent.widthAnchor).isActive = true
         return parent
     }
+
+    private func hideInShortcutsControl(_ item: BlacklistEntry) -> NSView {
+        let control = NSSegmentedControl(labels: BlacklistEntry.allShortcuts.map { String($0 + 1) }, trackingMode: .selectAny, target: nil, action: nil)
+        control.translatesAutoresizingMaskIntoConstraints = false
+        control.controlSize = .small
+        control.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+        BlacklistEntry.allShortcuts.forEach { i in
+            control.setSelected(item.hideIn.contains(i), forSegment: i)
+            if #available(macOS 10.13, *) {
+                control.setToolTip(i == Preferences.gestureIndex
+                    ? NSLocalizedString("Shortcut 4 and Gesture", comment: "")
+                    : String(format: NSLocalizedString("Shortcut %d", comment: ""), i + 1), forSegment: i)
+            }
+        }
+        control.isEnabled = item.hide != .none
+        control.onAction = { control in
+            let control = control as! NSSegmentedControl
+            let row = self.row(for: control)
+            self.items[row].hideIn = BlacklistEntry.allShortcuts.filter { control.isSelected(forSegment: $0) }
+            self.savePreferences()
+        }
+        let parent = NSView()
+        parent.addSubview(control)
+        control.centerYAnchor.constraint(equalTo: parent.centerYAnchor).isActive = true
+        control.centerXAnchor.constraint(equalTo: parent.centerXAnchor).isActive = true
+        return parent
+    }
 }
 
 extension TableView: NSTableViewDataSource {
@@ -124,7 +155,11 @@ extension TableView: NSTableViewDataSource {
 extension TableView: NSTableViewDelegate {
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         let item = items[row]
-        return tableColumn!.identifier.rawValue == "col1" ? text(item) : dropdown(item, tableColumn!.identifier.rawValue)
+        switch tableColumn!.identifier.rawValue {
+            case "col1": return text(item)
+            case "col3": return hideInShortcutsControl(item)
+            default: return dropdown(item, tableColumn!.identifier.rawValue)
+        }
     }
 }
 

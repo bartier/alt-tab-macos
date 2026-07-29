@@ -468,16 +468,13 @@ class ThumbnailView: FlippedView {
             return appName
         }
 
-        // Windows view: dynamic behavior based on how many windows belong to the same app
-        // If more than one window for this app is present, show "App Name: Window Title"
-        // If only one, show just the app name
-        let sameAppCount = Windows.list.filter { $0.application.pid == window_?.application.pid }.count
-        if sameAppCount > 1 {
-            if windowTitle.isEmpty { return appName }
-            return "\(appName): \(windowTitle)"
-        } else {
+        // Windows view: always show "App Name: Window Title" so labels stay stable
+        // regardless of how many windows the app has; skip the title when it's
+        // empty or just repeats the app name (bestEffortTitle falls back to it)
+        if windowTitle.isEmpty || windowTitle == appName {
             return appName
         }
+        return "\(appName): \(windowTitle)"
     }
 
     private func setFrameWidthHeight(_ newHeight: CGFloat) {

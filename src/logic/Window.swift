@@ -127,7 +127,11 @@ class Window {
     }
 
     func canBeMinDeminOrFullscreened() -> Bool {
-        return !isWindowlessApp && !isTabbed
+        // isTabbed is intentionally not checked: tab detection is a flaky heuristic (see
+        // detectTabbedWindows) that also flags occluded or other-Space windows, which can be
+        // minimized/fullscreened just fine. For a genuine macOS-native tab, the AX call ends
+        // up targeting the host window, which is harmless
+        return !isWindowlessApp
     }
 
     func minDemin() {

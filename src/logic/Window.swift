@@ -9,6 +9,9 @@ class Window {
     var thumbnail: CGImage?
     var icon: CGImage? { get { application.icon } }
     var shouldShowTheUser = true
+    /// visibility computed from preferences only; the search query is applied on top of it,
+    /// so changing the query can restore windows without recomputing the expensive base state
+    var shouldShowTheUserIgnoringSearch = true
     var isTabbed: Bool = false
     var isHidden: Bool { get { application.isHidden } }
     var dockLabel: String? { get { application.dockLabel } }
@@ -135,6 +138,11 @@ class Window {
     }
 
     func minDemin() {
+        if isWindowlessApp {
+            // there is no window to minimize; hiding the app is the closest equivalent
+            application.hideOrShow()
+            return
+        }
         if !canBeMinDeminOrFullscreened() {
             NSSound.beep()
             return
@@ -253,6 +261,11 @@ class Window {
         let maxPrefixLen = 30
         let prefix = raw.count > maxPrefixLen ? String(raw.prefix(maxPrefixLen)) + "…" : raw
         return "\(replacement): \(prefix)"
+    }
+
+    /// haystack used by the type-to-search filter: app name + window title
+    func searchHaystack() -> String {
+        return (application.displayName + " " + (title ?? "")).folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
     }
 
     /// window may not be visible on that screen (e.g. the window is not on the current Space)

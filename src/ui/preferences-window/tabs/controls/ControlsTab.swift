@@ -158,6 +158,13 @@ class ControlsTab {
           )
         )
 
+        table.addRow(
+          TableGroupView.Row(
+            leftTitle: NSLocalizedString("Type to filter the list", comment: ""),
+            rightViews: [ LabelAndControl.makeSwitch(Preferences.indexToName("typeToSearch", index)) ]
+          )
+        )
+
         table.addNewTable()
 
         table.addRow(

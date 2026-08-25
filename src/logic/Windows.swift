@@ -1,5 +1,6 @@
 import Cocoa
 import ApplicationServices.HIServices.AXAttributeConstants
+import Carbon.HIToolbox.Events
 
 class Windows {
     static var list = [Window]()
@@ -23,6 +24,7 @@ class Windows {
     static func resetInteractionState() {
         hoveredWindowIndex = nil
         lastWindowActivityType = .none
+        WindowSearch.reset()
     }
 
     /// Updates windows "lastFocusOrder" to ensure unique values based on window z-order.
@@ -353,9 +355,47 @@ class Windows {
             refreshIfWindowShouldBeShownToTheUser(window, activePidSnapshot)
         }
         refreshWhichWindowsToShowTheUser()
+        for window in list {
+            window.shouldShowTheUserIgnoringSearch = window.shouldShowTheUser
+        }
+        applySearchFilter()
         sort()
-        if (!list.contains { $0.shouldShowTheUser }) { return false }
+        if (!list.contains { $0.shouldShowTheUser }) {
+            // while searching, an empty result is a normal state: we keep the switcher open
+            // showing the search field, so the user can fix their query
+            return WindowSearch.isActive
+        }
         return true
+    }
+
+    /// re-derives shouldShowTheUser from the preference-based visibility and the current
+    /// search query. Cheap enough to run on every keystroke, unlike updatesBeforeShowing()
+    static func applySearchFilter() {
+        for window in list {
+            window.shouldShowTheUser = window.shouldShowTheUserIgnoringSearch
+        }
+        guard WindowSearch.isActive else {
+            WindowSearch.hasNoMatches = false
+            return
+        }
+        var someWindowMatches = false
+        for window in list where window.shouldShowTheUser {
+            if WindowSearch.matches(window) {
+                someWindowMatches = true
+            } else {
+                window.shouldShowTheUser = false
+            }
+        }
+        WindowSearch.hasNoMatches = !someWindowMatches
+    }
+
+    /// keeps the selection on a window the user can actually see; when the current selection
+    /// is filtered out, we jump to the first match, as users expect from a search field
+    static func focusFirstSearchMatchIfNeeded() {
+        if list.indices.contains(focusedWindowIndex) && list[focusedWindowIndex].shouldShowTheUser { return }
+        if let index = list.firstIndex(where: { $0.shouldShowTheUser }) {
+            updateFocusedAndHoveredWindowIndex(index)
+        }
     }
 
     /// lightweight refresh of Space and tab state for all windows; same per-trigger work
@@ -586,4 +626,109 @@ enum WindowActivityType: Int {
     case none = 0
     case hover = 1
     case focus = 2
+}
+
+/// type-to-search state. When a shortcut is set to "After release: Do nothing", the switcher
+/// stays open without a held modifier, so plain keystrokes are free to build a query which
+/// filters the list; Enter then focuses the selected window
+class WindowSearch {
+    static private(set) var query = ""
+    /// query, folded and split; precomputed since it's matched against every window on every refresh
+    static private var tokens = [String]()
+    static var hasNoMatches = false
+
+    static var isActive: Bool { !query.isEmpty }
+
+    /// the shortcut currently showing the switcher must keep the UI up without a held modifier,
+    /// and have type-to-search enabled
+    static var isEnabledForCurrentShortcut: Bool {
+        let index = App.app.shortcutIndex
+        guard (0..<Preferences.typeToSearch.count).contains(index) else { return false }
+        return Preferences.shortcutStyle[index] == .doNothingOnRelease && Preferences.typeToSearch[index]
+    }
+
+    static func reset() {
+        setQuery("")
+    }
+
+    static func append(_ characters: String) {
+        setQuery(query + characters)
+    }
+
+    static func deleteLastCharacter() {
+        guard !query.isEmpty else { return }
+        setQuery(String(query.dropLast()))
+    }
+
+    private static func setQuery(_ newQuery: String) {
+        query = newQuery
+        tokens = newQuery
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+            .split(separator: " ")
+            .map { String($0) }
+        if newQuery.isEmpty {
+            hasNoMatches = false
+        }
+    }
+
+    /// keys we claim while the switcher is open
+    enum KeyAction {
+        case select
+        case deleteLastCharacter
+        case clear
+        case append(String)
+    }
+
+    /// decides whether a key press belongs to the search field rather than to the app underneath
+    /// or to a "when active" shortcut. Called on the keyboard-events thread
+    static func interpretKeyDown(_ cgEvent: CGEvent, _ keyCode: UInt32) -> KeyAction? {
+        guard isEnabledForCurrentShortcut else { return nil }
+        let flags = cgEvent.flags
+        // modified key presses stay available for shortcuts (e.g. ⌘W in the app underneath)
+        if flags.contains(.maskCommand) || flags.contains(.maskControl) || flags.contains(.maskAlternate) { return nil }
+        switch Int(keyCode) {
+            case kVK_Return, kVK_ANSI_KeypadEnter: return .select
+            case kVK_Delete: return isActive ? .deleteLastCharacter : nil
+            // first Escape clears the query, a second one closes the switcher (cancelShortcut)
+            case kVK_Escape: return isActive ? .clear : nil
+            // Tab keeps cycling the selection
+            case kVK_Tab: return nil
+            // Space stays the "focus selected window" shortcut until a search is started
+            case kVK_Space: return isActive ? .append(" ") : nil
+            default: break
+        }
+        guard let characters = typedCharacters(cgEvent) else { return nil }
+        return .append(characters)
+    }
+
+    static func execute(_ action: KeyAction) {
+        switch action {
+            case .select: App.app.focusTargetFromKeyboard()
+            case .deleteLastCharacter: App.app.deleteLastSearchCharacter()
+            case .clear: App.app.clearSearchQuery()
+            case .append(let characters): App.app.appendToSearchQuery(characters)
+        }
+    }
+
+    /// the text this key press would insert, or nil for keys which type nothing
+    /// (arrows and other function keys are mapped to Unicode's private-use area)
+    private static func typedCharacters(_ cgEvent: CGEvent) -> String? {
+        var length = 0
+        var codeUnits = [UniChar](repeating: 0, count: 4)
+        cgEvent.keyboardGetUnicodeString(maxStringLength: codeUnits.count, actualStringLength: &length, unicodeString: &codeUnits)
+        guard length > 0 else { return nil }
+        let characters = String(utf16CodeUnits: codeUnits, count: length)
+        guard characters.unicodeScalars.allSatisfy({
+            $0.value >= 0x20 && $0.value != 0x7F && !(0xF700...0xF8FF).contains($0.value)
+        }) else { return nil }
+        return characters
+    }
+
+    /// every token must appear somewhere in the app name or the window title; this makes
+    /// "chr gh" find a GitHub tab in Chrome, without the surprises of fuzzy matching
+    static func matches(_ window: Window) -> Bool {
+        guard !tokens.isEmpty else { return true }
+        let haystack = window.searchHaystack()
+        return tokens.allSatisfy { haystack.contains($0) }
+    }
 }

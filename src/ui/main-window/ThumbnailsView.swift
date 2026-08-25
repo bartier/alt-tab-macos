@@ -3,6 +3,7 @@ import Cocoa
 class ThumbnailsView: NSVisualEffectView {
     let scrollView = ScrollView()
     let spaceLegendView = SpaceLegendView()
+    let searchFieldView = SearchFieldView()
     static var recycledViews = [ThumbnailView]()
     var rows = [[ThumbnailView]]()
     static var thumbnailsWidth = CGFloat(0.0)
@@ -15,6 +16,7 @@ class ThumbnailsView: NSVisualEffectView {
         state = .active
         wantsLayer = true
         updateRoundedCorners(Appearance.windowCornerRadius)
+        addSubview(searchFieldView)
         addSubview(spaceLegendView)
         addSubview(scrollView)
         // TODO: think about this optimization more
@@ -106,6 +108,7 @@ class ThumbnailsView: NSVisualEffectView {
 
     func updateItemsAndLayout() {
         let widthMax = ThumbnailsPanel.maxThumbnailsWidth().rounded()
+        searchFieldView.refresh()
         spaceLegendView.refresh()
         if let (maxX, maxY, labelHeight) = layoutThumbnailViews(widthMax) {
             layoutParentViews(maxX, widthMax, maxY, labelHeight)
@@ -187,12 +190,15 @@ class ThumbnailsView: NSVisualEffectView {
         ThumbnailsView.thumbnailsHeight = min(maxY, heightMax)
         let legendHeight = spaceLegendView.isHidden ? 0 : spaceLegendView.preferredHeight
         let legendGap = spaceLegendView.isHidden ? 0 : Appearance.intraCellPadding
+        let searchHeight = searchFieldView.isHidden ? 0 : searchFieldView.preferredHeight
+        let searchGap = searchFieldView.isHidden ? 0 : Appearance.intraCellPadding
         // the legend can be wider than the thumbnails (e.g. few narrow windows across many Spaces);
         // the panel must fit whichever is wider, or the legend chips overflow past the panel edges
         let legendWidth = spaceLegendView.isHidden ? 0 : min(spaceLegendView.fittingWidth.rounded(.up), widthMax)
-        let contentWidth = max(ThumbnailsView.thumbnailsWidth, legendWidth)
+        let searchWidth = searchFieldView.isHidden ? 0 : min(searchFieldView.fittingWidth.rounded(.up), widthMax)
+        let contentWidth = max(ThumbnailsView.thumbnailsWidth, legendWidth, searchWidth)
         let frameWidth = contentWidth + Appearance.windowPadding * 2
-        var frameHeight = ThumbnailsView.thumbnailsHeight + Appearance.windowPadding * 2 + legendHeight + legendGap
+        var frameHeight = ThumbnailsView.thumbnailsHeight + Appearance.windowPadding * 2 + legendHeight + legendGap + searchHeight + searchGap
         let originX = Appearance.windowPadding + ((contentWidth - ThumbnailsView.thumbnailsWidth) / 2).rounded()
         var originY = Appearance.windowPadding
         if Preferences.appearanceStyle == .appIcons {
@@ -201,9 +207,13 @@ class ThumbnailsView: NSVisualEffectView {
             originY = originY - Appearance.intraCellPadding - labelHeight
         }
         frame.size = NSSize(width: frameWidth, height: frameHeight)
-        // ThumbnailsView is not flipped: y=0 is bottom, so the legend goes near the top of the frame.
+        // ThumbnailsView is not flipped: y=0 is bottom, so the search field and the legend go
+        // near the top of the frame, the search field being the topmost row.
+        searchFieldView.frame = NSRect(x: Appearance.windowPadding,
+            y: frameHeight - Appearance.windowPadding - searchHeight,
+            width: contentWidth, height: searchHeight)
         spaceLegendView.frame = NSRect(x: Appearance.windowPadding,
-            y: frameHeight - Appearance.windowPadding - legendHeight,
+            y: frameHeight - Appearance.windowPadding - searchHeight - searchGap - legendHeight,
             width: contentWidth, height: legendHeight)
         scrollView.frame.size = NSSize(width: min(maxX, widthMax), height: min(maxY, heightMax))
         scrollView.frame.origin = CGPoint(x: originX, y: originY)
@@ -447,6 +457,57 @@ class SpaceLegendView: NSView {
         chip.addArrangedSubview(dot)
         chip.addArrangedSubview(label)
         return chip
+    }
+}
+
+/// shows the type-to-search query at the top of the panel. It is not a real NSTextField:
+/// the switcher is a non-activating panel, so keystrokes are captured by the event tap and
+/// this view only renders the resulting query
+class SearchFieldView: NSView {
+    private let label = NSTextField(labelWithString: "")
+
+    var preferredHeight: CGFloat {
+        return (Appearance.fontHeight * 1.6).rounded()
+    }
+
+    var fittingWidth: CGFloat {
+        return label.fittingSize.width + Appearance.windowPadding * 2
+    }
+
+    convenience init() {
+        self.init(frame: .zero)
+        wantsLayer = true
+        layer?.masksToBounds = true
+        label.font = NSFont.systemFont(ofSize: Appearance.fontHeight)
+        label.lineBreakMode = .byTruncatingHead
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+        let leadingConstraint = label.leadingAnchor.constraint(equalTo: leadingAnchor)
+        let trailingConstraint = label.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor)
+        // optional, so a transiently zero-width frame is not a constraint conflict
+        trailingConstraint.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            leadingConstraint,
+            trailingConstraint,
+        ])
+    }
+
+    func refresh() {
+        guard WindowSearch.isActive else {
+            isHidden = true
+            return
+        }
+        isHidden = false
+        label.font = NSFont.systemFont(ofSize: Appearance.fontHeight)
+        let query = WindowSearch.query
+        if WindowSearch.hasNoMatches {
+            label.stringValue = String(format: NSLocalizedString("%@ — no matching window", comment: ""), query)
+            label.textColor = Appearance.fontColor.withAlphaComponent(0.6)
+        } else {
+            label.stringValue = query
+            label.textColor = Appearance.fontColor
+        }
     }
 }
 

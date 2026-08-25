@@ -86,6 +86,10 @@ class Preferences {
         "shortcutStyle2": ShortcutStylePreference.focusOnRelease.indexAsString,
         "shortcutStyle3": ShortcutStylePreference.focusOnRelease.indexAsString,
         "shortcutStyle4": ShortcutStylePreference.focusOnRelease.indexAsString,
+        "typeToSearch": "true",
+        "typeToSearch2": "true",
+        "typeToSearch3": "true",
+        "typeToSearch4": "true",
         "raycastIntegration": "false",
         "raycastIntegration2": "false",
         "raycastIntegration3": "false",
@@ -165,6 +169,7 @@ class Preferences {
     static var showFullscreenWindows: [ShowHowPreference] { ["showFullscreenWindows", "showFullscreenWindows2", "showFullscreenWindows3", "showFullscreenWindows4"].map { CachedUserDefaults.macroPref($0, ShowHowPreference.allCases) } }
     static var windowOrder: [WindowOrderPreference] { ["windowOrder", "windowOrder2", "windowOrder3", "windowOrder4"].map { CachedUserDefaults.macroPref($0, WindowOrderPreference.allCases) } }
     static var shortcutStyle: [ShortcutStylePreference] { ["shortcutStyle", "shortcutStyle2", "shortcutStyle3", "shortcutStyle4"].map { CachedUserDefaults.macroPref($0, ShortcutStylePreference.allCases) } }
+    static var typeToSearch: [Bool] { ["typeToSearch", "typeToSearch2", "typeToSearch3", "typeToSearch4"].map { CachedUserDefaults.bool($0) } }
     static var raycastIntegration: [Bool] { ["raycastIntegration", "raycastIntegration2", "raycastIntegration3", "raycastIntegration4"].map { CachedUserDefaults.bool($0) } }
     static var menubarIcon: MenubarIconPreference { CachedUserDefaults.macroPref("menubarIcon", MenubarIconPreference.allCases) }
     static var menubarIconShown: Bool { CachedUserDefaults.bool("menubarIconShown") }

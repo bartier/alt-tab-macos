@@ -132,6 +132,44 @@ class App: AppCenterApplication {
         focusSelectedWindow(focusedWindow)
     }
 
+    /// type-to-search: the query changed, so re-filter the list and rebuild the panel.
+    /// This avoids updatesBeforeShowing(), which does per-window AX/Spaces work too slow to
+    /// run on every keystroke; only the search filter and the layout are recomputed
+    func searchQueryChanged() {
+        guard appIsBeingUsed else { return }
+        Logger.debug(WindowSearch.query)
+        // the user picked their own target; don't force the "2nd MRU" selection on release
+        userNavigatedThisSummon = true
+        Windows.applySearchFilter()
+        Windows.focusFirstSearchMatchIfNeeded()
+        refreshOpenUi([], .showUi)
+    }
+
+    func appendToSearchQuery(_ characters: String) {
+        WindowSearch.append(characters)
+        searchQueryChanged()
+    }
+
+    func deleteLastSearchCharacter() {
+        guard WindowSearch.isActive else { return }
+        WindowSearch.deleteLastCharacter()
+        searchQueryChanged()
+    }
+
+    func clearSearchQuery() {
+        guard WindowSearch.isActive else { return }
+        WindowSearch.reset()
+        searchQueryChanged()
+    }
+
+    /// Enter, in shortcuts which keep the switcher open after release
+    func focusTargetFromKeyboard() {
+        guard appIsBeingUsed else { return }
+        // an empty search result has no meaningful selection; wait for the user to fix their query
+        guard !WindowSearch.hasNoMatches else { return }
+        focusTarget()
+    }
+
     @objc func checkForUpdatesNow(_ sender: NSMenuItem) {
         PoliciesTab.checkForUpdatesNow(sender)
     }

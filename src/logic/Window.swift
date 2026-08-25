@@ -263,9 +263,11 @@ class Window {
         return "\(replacement): \(prefix)"
     }
 
-    /// haystack used by the type-to-search filter: app name + window title
+    /// haystack used by the type-to-search filter: app name, plus both the raw window title
+    /// and the title override shown in the switcher (users search for what they see)
     func searchHaystack() -> String {
-        return (application.displayName + " " + (title ?? "")).folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+        let parts = [application.displayName, matchedReplacement() ?? "", title ?? ""]
+        return parts.joined(separator: " ").folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
     }
 
     /// window may not be visible on that screen (e.g. the window is not on the current Space)

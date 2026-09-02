@@ -263,6 +263,7 @@ class Window {
             other !== self && other.shouldShowTheUser && other.application.bundleIdentifier == application.bundleIdentifier && other.matchedReplacement() == replacement
         }
         guard hasSibling else { return replacement }
+        Logger.debug("label shared by several windows of the app, appending raw title", application.bundleIdentifier ?? "", replacement, raw)
         let maxPrefixLen = 30
         let prefix = raw.count > maxPrefixLen ? String(raw.prefix(maxPrefixLen)) + "…" : raw
         return "\(replacement): \(prefix)"

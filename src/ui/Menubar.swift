@@ -126,7 +126,6 @@ class SharingMenuDelegate: NSObject, NSMenuDelegate {
             item.target = self
             item.representedObject = group.id
             item.state = group.id == current ? .on : .off
-            item.image = NSColor(windowGroupHex: group.color).map { NSImage.windowGroupDot($0, 10) }
             menu.addItem(item)
         }
     }

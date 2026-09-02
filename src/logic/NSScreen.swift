@@ -12,6 +12,8 @@ extension NSScreen {
             case .includingMouse: return withMouse()
             case .active: return NSScreen.active()
             case .includingMenubar: return NSScreen.screens.first
+            // the mirrors are shown on the other screens; this one holds the real, interactive panel
+            case .all: return withMouse() ?? NSScreen.active()
         }
     }
 
@@ -41,6 +43,15 @@ extension NSScreen {
 
     static func withMouse() -> NSScreen? {
         return NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }
+    }
+
+    /// `point` is in Quartz coordinates (top-left origin), as used by the accessibility APIs and `CGWarpMouseCursorPosition`
+    static func withPointInQuartzCoordinates(_ point: CGPoint) -> NSScreen? {
+        return NSScreen.screens.first { screen in
+            var frame = screen.frame
+            frame.origin.y = NSMaxY(NSScreen.screens[0].frame) - NSMaxY(screen.frame)
+            return frame.contains(point)
+        }
     }
 
     func ratio() -> CGFloat {

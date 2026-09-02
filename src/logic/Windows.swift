@@ -232,6 +232,7 @@ class Windows {
         ThumbnailsView.highlight(index)
         let focusedView = ThumbnailsView.recycledViews[index]
         App.app.thumbnailsPanel.thumbnailsView.scrollView.contentView.scrollToVisible(focusedView.frame)
+        ThumbnailsMirror.setNeedsRefresh()
         voiceOverWindow(index)
     }
 

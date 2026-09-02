@@ -46,20 +46,21 @@ class ThumbnailsView: NSVisualEffectView {
     /// using layer!.cornerRadius works but the corners are aliased; this custom approach gives smooth rounded corners
     /// see https://stackoverflow.com/a/29386935/2249756
     func updateRoundedCorners(_ cornerRadius: CGFloat) {
-        if cornerRadius == 0 {
-            maskImage = nil
-        } else {
-            let edgeLength = 2.0 * cornerRadius + 1.0
-            let mask = NSImage(size: NSSize(width: edgeLength, height: edgeLength), flipped: false) { rect in
-                let bezierPath = NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius)
-                NSColor.black.set()
-                bezierPath.fill()
-                return true
-            }
-            mask.capInsets = NSEdgeInsets(top: cornerRadius, left: cornerRadius, bottom: cornerRadius, right: cornerRadius)
-            mask.resizingMode = .stretch
-            maskImage = mask
+        maskImage = ThumbnailsView.roundedMaskImage(cornerRadius)
+    }
+
+    static func roundedMaskImage(_ cornerRadius: CGFloat) -> NSImage? {
+        guard cornerRadius != 0 else { return nil }
+        let edgeLength = 2.0 * cornerRadius + 1.0
+        let mask = NSImage(size: NSSize(width: edgeLength, height: edgeLength), flipped: false) { rect in
+            let bezierPath = NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius)
+            NSColor.black.set()
+            bezierPath.fill()
+            return true
         }
+        mask.capInsets = NSEdgeInsets(top: cornerRadius, left: cornerRadius, bottom: cornerRadius, right: cornerRadius)
+        mask.resizingMode = .stretch
+        return mask
     }
 
     func nextRow(_ direction: Direction, allowWrap: Bool = true) -> [ThumbnailView]? {

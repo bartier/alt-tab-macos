@@ -111,7 +111,6 @@ class TitleOverridesTableView: NSTableView {
         for group in groups {
             button.addItem(withTitle: group.name)
             button.lastItem!.representedObject = group.id
-            button.lastItem!.image = NSColor(windowGroupHex: group.color).map { NSImage.windowGroupDot($0, 10) }
         }
         let selected = item.groupId.flatMap { id in groups.firstIndex { $0.id == id } }.map { $0 + 1 } ?? 0
         button.selectItem(at: selected)

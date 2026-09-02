@@ -1,7 +1,6 @@
 import Cocoa
 
 class ThumbnailView: FlippedView {
-    static let groupDotPrefix = "● "
     static let noOpenWindowToolTip = NSLocalizedString("App is running but has no open window", comment: "")
     var window_: Window?
     var thumbnail = LightImageView()
@@ -117,7 +116,7 @@ class ThumbnailView: FlippedView {
         updateValues(element, index, newHeight)
         updateSizes(newHeight)
         updatePositions(newHeight)
-        label.toolTip = label.cell!.cellSize.width >= label.frame.size.width ? label.titleWithoutGroupDot : nil
+        label.toolTip = label.cell!.cellSize.width >= label.frame.size.width ? label.stringValue : nil
     }
 
     func drawHighlight() {
@@ -312,7 +311,7 @@ class ThumbnailView: FlippedView {
         let yPosition = view.hStackView.frame.origin.y + view.hStackView.frame.height + Appearance.intraCellPadding * 2
         view.label.frame = NSRect(x: xPosition, y: yPosition, width: effectiveLabelWidth, height: height)
         view.label.setWidth(effectiveLabelWidth)
-        view.label.toolTip = view.label.cell!.cellSize.width >= view.label.frame.size.width ? view.label.titleWithoutGroupDot : nil
+        view.label.toolTip = view.label.cell!.cellSize.width >= view.label.frame.size.width ? view.label.stringValue : nil
     }
 
     private func updateAppIcon(_ element: Window, _ title: String) {
@@ -346,19 +345,9 @@ class ThumbnailView: FlippedView {
             thumbnail.setAccessibilityLabel(element.title)
         }
         let title = getAppOrAndWindowTitle()
-        let groupColor = window_?.group().flatMap { NSColor(windowGroupHex: $0.color) }
-        let decoratedTitle = groupColor == nil ? title : ThumbnailView.groupDotPrefix + title
-        let labelChanged = label.stringValue != decoratedTitle || label.groupDotColor != groupColor
+        let labelChanged = label.stringValue != title
         if labelChanged {
-            label.groupDotColor = groupColor
-            if let groupColor {
-                // a coloured dot in front of the title shows the window's Group without any text
-                let attributed = NSMutableAttributedString(string: decoratedTitle, attributes: [.font: label.font!, .foregroundColor: Appearance.fontColor])
-                attributed.addAttribute(.foregroundColor, value: groupColor, range: NSRange(location: 0, length: 1))
-                label.attributedStringValue = attributed
-            } else {
-                label.stringValue = title
-            }
+            label.stringValue = title
             setAccessibilityLabel(title)
         }
         label.updateTruncationModeIfNeeded()

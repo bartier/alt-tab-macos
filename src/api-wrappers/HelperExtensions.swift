@@ -328,18 +328,6 @@ extension NSColor {
     }
 }
 
-extension NSImage {
-    static func windowGroupDot(_ color: NSColor, _ diameter: CGFloat) -> NSImage {
-        let image = NSImage(size: NSSize(width: diameter, height: diameter), flipped: false) { rect in
-            color.setFill()
-            NSBezierPath(ovalIn: rect).fill()
-            return true
-        }
-        image.isTemplate = false
-        return image
-    }
-}
-
 class PermissionCallout: StackView {
     convenience init() {
         let label = NSTextField(wrappingLabelWithString: NSLocalizedString("AltTab is running without Screen Recording permissions. Thumbnails won’t show.", comment: "Menubar callout"))

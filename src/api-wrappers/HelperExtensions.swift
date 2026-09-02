@@ -312,3 +312,51 @@ extension Optional {
         if let self { return self } else { throw Error.unexpectedNil }
     }
 }
+
+extension NSColor {
+    /// "#rrggbb" or "rrggbb"
+    convenience init?(windowGroupHex hex: String) {
+        var h = hex.trimmingCharacters(in: .whitespaces)
+        if h.hasPrefix("#") { h.removeFirst() }
+        guard h.count == 6, let v = UInt32(h, radix: 16) else { return nil }
+        self.init(srgbRed: CGFloat((v >> 16) & 0xff) / 255, green: CGFloat((v >> 8) & 0xff) / 255, blue: CGFloat(v & 0xff) / 255, alpha: 1)
+    }
+
+    var windowGroupHex: String {
+        let c = usingColorSpace(.sRGB) ?? self
+        return String(format: "#%02x%02x%02x", Int(round(c.redComponent * 255)), Int(round(c.greenComponent * 255)), Int(round(c.blueComponent * 255)))
+    }
+}
+
+extension NSImage {
+    static func windowGroupDot(_ color: NSColor, _ diameter: CGFloat) -> NSImage {
+        let image = NSImage(size: NSSize(width: diameter, height: diameter), flipped: false) { rect in
+            color.setFill()
+            NSBezierPath(ovalIn: rect).fill()
+            return true
+        }
+        image.isTemplate = false
+        return image
+    }
+}
+
+class PermissionCallout: StackView {
+    convenience init() {
+        let label = NSTextField(wrappingLabelWithString: NSLocalizedString("AltTab is running without Screen Recording permissions. Thumbnails won’t show.", comment: "Menubar callout"))
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.textColor = .white
+        label.preferredMaxLayoutWidth = 250
+        label.isSelectable = false
+        label.addOrUpdateConstraint(label.widthAnchor, 250)
+        let button = NSButton()
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.attributedTitle = NSAttributedString(string: NSLocalizedString("Grant permission", comment: "Menubar callout button"), attributes: [NSAttributedString.Key.foregroundColor: NSColor.white])
+        button.onAction = { _ in
+            Preferences.remove("screenRecordingPermissionSkipped")
+            App.app.restart()
+        }
+        self.init([label, button], .vertical, true, top: 8, right: 15, bottom: 10, left: 15)
+        wantsLayer = true
+        layer!.backgroundColor = NSColor.purple.cgColor
+    }
+}

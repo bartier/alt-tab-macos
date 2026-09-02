@@ -5,7 +5,7 @@ Window switcher for macOS, forked to separate windows from several employers so 
 ## Language
 
 **Group**:
-The owner a window belongs to: Me, one of the companies, or Unknown when nothing assigns it. Every window has exactly one Group. A Group has a name, a colour and a rank; the rank orders windows of the same app.
+The owner a window belongs to: Me, one of the companies, or Unknown when nothing assigns it. Every window has exactly one Group. A Group has a name, a colour and a rank; the rank orders windows of the same app. A Group can be marked always visible while sharing; the user marks Me this way.
 _Avoid_: Company, context, workspace, profile
 
 **Unknown**:

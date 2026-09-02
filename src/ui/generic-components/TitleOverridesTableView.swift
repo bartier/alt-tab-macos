@@ -31,6 +31,7 @@ class TitleOverridesTableView: NSTableView {
             NSLocalizedString("Match type", comment: ""),
             NSLocalizedString("Title pattern", comment: ""),
             NSLocalizedString("Display as", comment: ""),
+            NSLocalizedString("Group", comment: ""),
         ])
         reloadData()
     }
@@ -65,7 +66,7 @@ class TitleOverridesTableView: NSTableView {
     }
 
     private func addHeaders(_ columnHeaders: [String]) {
-        let widths: [CGFloat] = [140, 90, 120, 120]
+        let widths: [CGFloat] = [130, 80, 110, 100, 90]
         columnHeaders.enumerated().forEach { (i, header: String) in
             let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("col\(i + 1)"))
             column.headerToolTip = header
@@ -83,6 +84,9 @@ class TitleOverridesTableView: NSTableView {
             case "col2": items[row].matchType = TitleOverrideMatchType.allCases[Int(LabelAndControl.getControlValue(control, nil)!)!]
             case "col3": items[row].pattern = LabelAndControl.getControlValue(control, nil) ?? ""
             case "col4": items[row].replacement = LabelAndControl.getControlValue(control, nil) ?? ""
+            case "col5":
+                // the Group id was stored on the menu item when the dropdown was built, so a later reorder can't shift it
+                items[row].groupId = (control as! NSPopUpButton).selectedItem?.representedObject as? String
             default: break
         }
         savePreferences()
@@ -90,6 +94,33 @@ class TitleOverridesTableView: NSTableView {
 
     private func savePreferences() {
         Preferences.set("titleOverrides", items)
+    }
+
+    /// re-reads the rows from preferences (e.g. after a Group was deleted) and redraws the Group dropdowns
+    func reloadFromPreferences() {
+        items = Preferences.titleOverrides
+        reloadData()
+    }
+
+    private func groupDropdown(_ item: TitleOverrideEntry, _ colId: String) -> NSView {
+        let button = NSPopUpButton()
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.lineBreakMode = .byTruncatingTail
+        let groups = Preferences.windowGroups
+        button.addItem(withTitle: "—")
+        for group in groups {
+            button.addItem(withTitle: group.name)
+            button.lastItem!.representedObject = group.id
+            button.lastItem!.image = NSColor(windowGroupHex: group.color).map { NSImage.windowGroupDot($0, 10) }
+        }
+        let selected = item.groupId.flatMap { id in groups.firstIndex { $0.id == id } }.map { $0 + 1 } ?? 0
+        button.selectItem(at: selected)
+        button.onAction = { self.wasUpdated(colId, $0) }
+        let parent = NSView()
+        parent.addSubview(button)
+        button.centerYAnchor.constraint(equalTo: parent.centerYAnchor).isActive = true
+        button.widthAnchor.constraint(equalTo: parent.widthAnchor).isActive = true
+        return parent
     }
 
     private func text(_ value: String, _ colId: String) -> NSView {
@@ -140,6 +171,7 @@ extension TitleOverridesTableView: NSTableViewDelegate {
             case "col2": return matchTypeDropdown(item, colId)
             case "col3": return text(item.pattern, colId)
             case "col4": return text(item.replacement, colId)
+            case "col5": return groupDropdown(item, colId)
             default: return nil
         }
     }

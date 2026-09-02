@@ -80,7 +80,8 @@ class Preferences {
         "language": LanguagePreference.systemDefault.indexAsString,
         "blacklist": defaultBlacklist(),
         "titleOverrides": "[]",
-        "updatePolicy": UpdatePolicyPreference.autoCheck.indexAsString,
+        "windowGroups": "[]",
+        "sharingWithGroup": "",
         "crashPolicy": CrashPolicyPreference.ask.indexAsString,
         "shortcutStyle": ShortcutStylePreference.focusOnRelease.indexAsString,
         "shortcutStyle2": ShortcutStylePreference.focusOnRelease.indexAsString,
@@ -135,6 +136,15 @@ class Preferences {
     static var startAtLogin: Bool { CachedUserDefaults.bool("startAtLogin") }
     static var blacklist: [BlacklistEntry] { CachedUserDefaults.json("blacklist", [BlacklistEntry].self) }
     static var titleOverrides: [TitleOverrideEntry] { CachedUserDefaults.json("titleOverrides", [TitleOverrideEntry].self) }
+    /// ordered list of Groups; the position is the Group's rank
+    static var windowGroups: [WindowGroup] { CachedUserDefaults.json("windowGroups", [WindowGroup].self) }
+    /// Sharing session: id of the Group the screen is being shared with; empty = not sharing
+    static var sharingWithGroup: String { CachedUserDefaults.string("sharingWithGroup") }
+    static var isSharing: Bool { !sharingWithGroup.isEmpty }
+    static var sharingGroup: WindowGroup? { windowGroups.first { $0.id == sharingWithGroup } }
+    /// the Show on screen value actually in effect: a Sharing session overrides the stored preference
+    /// so the switcher only ever appears on the screen holding the cursor, never mirrored
+    static var effectiveShowOnScreen: ShowOnScreenPreference { isSharing ? .includingMouse : showOnScreen }
     static var previewFocusedWindow: Bool { CachedUserDefaults.bool("previewFocusedWindow") }
     static var screenRecordingPermissionSkipped: Bool { CachedUserDefaults.bool("screenRecordingPermissionSkipped") }
 
@@ -159,7 +169,6 @@ class Preferences {
         }
     }
     static var showTitles: ShowTitlesPreference { CachedUserDefaults.macroPref("showTitles", ShowTitlesPreference.allCases) }
-    static var updatePolicy: UpdatePolicyPreference { CachedUserDefaults.macroPref("updatePolicy", UpdatePolicyPreference.allCases) }
     static var crashPolicy: CrashPolicyPreference { CachedUserDefaults.macroPref("crashPolicy", CrashPolicyPreference.allCases) }
     static var appsToShow: [AppsToShowPreference] { ["appsToShow", "appsToShow2", "appsToShow3", "appsToShow4"].map { CachedUserDefaults.macroPref($0, AppsToShowPreference.allCases) } }
     static var spacesToShow: [SpacesToShowPreference] { ["spacesToShow", "spacesToShow2", "spacesToShow3", "spacesToShow4"].map { CachedUserDefaults.macroPref($0, SpacesToShowPreference.allCases) } }
@@ -191,13 +200,18 @@ class Preferences {
         UserDefaults.standard.register(defaults: defaultValues)
     }
 
+    /// bumped on every write; cheap way for derived values (e.g. a window's Group) to know their cache is stale
+    static var generation = 0
+
     static func set<T>(_ key: String, _ value: T) where T: Encodable {
-        let needsJsonEncoding = key == "blacklist" || key == "titleOverrides"
+        generation += 1
+        let needsJsonEncoding = key == "blacklist" || key == "titleOverrides" || key == "windowGroups"
         UserDefaults.standard.set(needsJsonEncoding ? jsonEncode(value) : value, forKey: key)
         CachedUserDefaults.cache.removeValue(forKey: key)
     }
 
     static func remove(_ key: String) {
+        generation += 1
         UserDefaults.standard.removeObject(forKey: key)
         CachedUserDefaults.cache.removeValue(forKey: key)
     }
@@ -351,12 +365,15 @@ struct TitleOverrideEntry: Codable {
     var matchType: TitleOverrideMatchType
     var pattern: String
     var replacement: String
+    /// optional Group; when set, this row is also a Membership rule
+    var groupId: String?
 
-    init(bundleIdentifier: String, matchType: TitleOverrideMatchType, pattern: String, replacement: String) {
+    init(bundleIdentifier: String, matchType: TitleOverrideMatchType, pattern: String, replacement: String, groupId: String? = nil) {
         self.bundleIdentifier = bundleIdentifier
         self.matchType = matchType
         self.pattern = pattern
         self.replacement = replacement
+        self.groupId = groupId
     }
 
     init(from decoder: Decoder) throws {
@@ -365,5 +382,17 @@ struct TitleOverrideEntry: Codable {
         matchType = try c.decode(TitleOverrideMatchType.self, forKey: .matchType)
         pattern = try c.decode(String.self, forKey: .pattern)
         replacement = try c.decode(String.self, forKey: .replacement)
+        // rows saved before Groups existed have no groupId
+        groupId = try c.decodeIfPresent(String.self, forKey: .groupId).flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    var rule: MembershipRule {
+        let match: TitleMatch
+        switch matchType {
+            case .contains: match = .contains
+            case .exact: match = .exact
+            case .regex: match = .regex
+        }
+        return MembershipRule(bundleIdentifier: bundleIdentifier, match: match, pattern: pattern, replacement: replacement, groupId: groupId)
     }
 }

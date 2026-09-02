@@ -8,7 +8,7 @@ extension NSScreen {
     }
 
     private static func detectPreferred() -> NSScreen? {
-        switch Preferences.showOnScreen {
+        switch Preferences.effectiveShowOnScreen {
             case .includingMouse: return withMouse()
             case .active: return NSScreen.active()
             case .includingMenubar: return NSScreen.screens.first

@@ -122,10 +122,27 @@ class Windows {
         }
     }
 
+    /// during a Sharing session, only windows of the shared Group, of always-visible Groups, or Unknown windows may show.
+    /// Applies to every shortcut: the session is a safety net, not a per-list preference
+    private static func isAllowedBySharingSession(_ window: Window) -> Bool {
+        guard Preferences.isSharing else { return true }
+        let group = window.group()
+        let allowed = WindowGroups.isAllowed(group, sharingWith: Preferences.sharingWithGroup)
+        if !allowed {
+            Logger.debug("hidden by sharing session", window.cgWindowId ?? 0, window.application.bundleIdentifier ?? "", group?.name ?? "Unknown")
+        }
+        return allowed
+    }
+
+    /// app name, then Group rank (Unknown last), then title
     private static func compareByAppNameThenWindowTitle(_ w1: Window, _ w2: Window) -> ComparisonResult {
         let order = w1.application.displayName.localizedStandardCompare(w2.application.displayName)
         if order == .orderedSame {
-            return w1.displayTitle().localizedStandardCompare(w2.displayTitle())
+            let t1 = w1.displayTitle()
+            let t2 = w2.displayTitle()
+            if WindowGroups.isOrderedBefore(w1.group(), t1, w2.group(), t2, groups: Preferences.windowGroups) { return .orderedAscending }
+            if WindowGroups.isOrderedBefore(w2.group(), t2, w1.group(), t1, groups: Preferences.windowGroups) { return .orderedDescending }
+            return .orderedSame
         }
         return order
     }
@@ -476,6 +493,7 @@ class Windows {
     /// for an arbitrary shortcut index (e.g. CLI queries) without affecting the open switcher
     static func isWindowShownToTheUser(_ window: Window, _ activePidSnapshot: pid_t?, _ shortcutIndex: Int) -> Bool {
         return
+            isAllowedBySharingSession(window) &&
             !(window.application.bundleIdentifier.flatMap { id in
                 Preferences.blacklist.contains {
                     id.hasPrefix($0.bundleIdentifier) &&

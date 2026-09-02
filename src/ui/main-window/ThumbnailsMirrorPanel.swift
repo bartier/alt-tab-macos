@@ -61,7 +61,7 @@ enum ThumbnailsMirror {
 
     /// re-render the mirrors on the next runloop pass; multiple calls within the same pass are coalesced
     static func setNeedsRefresh() {
-        guard Preferences.showOnScreen == .all, NSScreen.screens.count > 1 else { return }
+        guard Preferences.effectiveShowOnScreen == .all, NSScreen.screens.count > 1 else { return }
         guard !refreshScheduled else { return }
         refreshScheduled = true
         DispatchQueue.main.async {
@@ -94,7 +94,7 @@ enum ThumbnailsMirror {
     }
 
     private static func moveRealPanelToScreenWithMouse() {
-        guard App.app.appIsBeingUsed, Preferences.showOnScreen == .all,
+        guard App.app.appIsBeingUsed, Preferences.effectiveShowOnScreen == .all,
               let screen = NSScreen.withMouse(), screen != NSScreen.preferred else { return }
         NSScreen.preferred = screen
         let panel = App.app.thumbnailsPanel!
@@ -109,7 +109,7 @@ enum ThumbnailsMirror {
     }
 
     private static func refresh() {
-        guard App.app.appIsBeingUsed, Preferences.showOnScreen == .all else { hide(); return }
+        guard App.app.appIsBeingUsed, Preferences.effectiveShowOnScreen == .all else { hide(); return }
         let panel = App.app.thumbnailsPanel!
         let screens = NSScreen.screens.filter { $0 != NSScreen.preferred }
         guard !screens.isEmpty, panel.isVisible,

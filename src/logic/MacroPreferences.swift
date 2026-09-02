@@ -596,20 +596,6 @@ enum AppearanceVisibilityPreference: CaseIterable, SfSymbolMacroPreference {
     }
 }
 
-enum UpdatePolicyPreference: CaseIterable, MacroPreference {
-    case manual
-    case autoCheck
-    case autoInstall
-
-    var localizedString: LocalizedString {
-        switch self {
-            case .manual: return NSLocalizedString("Don’t check for updates periodically", comment: "")
-            case .autoCheck: return NSLocalizedString("Check for updates periodically", comment: "")
-            case .autoInstall: return NSLocalizedString("Auto-install updates periodically", comment: "")
-        }
-    }
-}
-
 enum CrashPolicyPreference: CaseIterable, MacroPreference {
     case never
     case ask

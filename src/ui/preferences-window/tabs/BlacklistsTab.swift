@@ -1,5 +1,4 @@
 import Cocoa
-import Sparkle
 
 class BlacklistsTab {
     static func initTab() -> NSView {

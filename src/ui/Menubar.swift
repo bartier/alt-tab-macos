@@ -4,6 +4,8 @@ class Menubar {
     static var statusItem: NSStatusItem!
     static var menu: NSMenu!
     static var permissionCalloutMenuItems: [NSMenuItem]?
+    static var sharingMenuItem: NSMenuItem!
+    static let sharingMenuDelegate = SharingMenuDelegate()
 
     static func initialize() {
         menu = NSMenu()
@@ -25,10 +27,10 @@ class Menubar {
             withTitle: NSLocalizedString("Preferences…", comment: "Menubar option"),
             action: #selector(App.app.showPreferencesWindow),
             keyEquivalent: ",")
-        menu.addItem(
-            withTitle: NSLocalizedString("Check for updates…", comment: "Menubar option"),
-            action: #selector(App.app.checkForUpdatesNow),
-            keyEquivalent: "")
+        sharingMenuItem = NSMenuItem(title: NSLocalizedString("Sharing with", comment: "Menubar option"), action: nil, keyEquivalent: "")
+        sharingMenuItem.submenu = NSMenu(title: "")
+        sharingMenuItem.submenu!.delegate = sharingMenuDelegate
+        menu.addItem(sharingMenuItem)
         menu.addItem(
             withTitle: NSLocalizedString("Check permissions…", comment: "Menubar option"),
             action: #selector(App.app.checkPermissions),
@@ -91,26 +93,52 @@ class Menubar {
         statusItem.button!.image = image
         statusItem.isVisible = true
         statusItem.button!.imageScaling = .scaleProportionallyUpOrDown
+        applySharingState()
+    }
+
+    /// while a Sharing session is on, the icon takes the shared Group's colour so a forgotten session is hard to miss
+    static func applySharingState() {
+        guard let button = statusItem?.button, let image = button.image else { return }
+        let sharingGroup = Preferences.sharingGroup
+        let i = Preferences.menubarIcon.indexAsString
+        image.isTemplate = sharingGroup != nil || i != "2"
+        button.image = image
+        if #available(macOS 10.14, *) {
+            button.contentTintColor = sharingGroup.flatMap { NSColor(windowGroupHex: $0.color) }
+        }
+        button.toolTip = sharingGroup.map { String(format: NSLocalizedString("Sharing with %@", comment: ""), $0.name) }
     }
 }
 
-class PermissionCallout: StackView {
-    convenience init() {
-        let label = NSTextField(wrappingLabelWithString: NSLocalizedString("AltTab is running without Screen Recording permissions. Thumbnails won’t show.", comment: "Menubar callout"))
-        label.translatesAutoresizingMaskIntoConstraints = false
-        label.textColor = .white
-        label.preferredMaxLayoutWidth = 250
-        label.isSelectable = false
-        label.addOrUpdateConstraint(label.widthAnchor, 250)
-        let button = NSButton()
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.attributedTitle = NSAttributedString(string: NSLocalizedString("Grant permission", comment: "Menubar callout button"), attributes: [NSAttributedString.Key.foregroundColor: NSColor.white])
-        button.onAction = { _ in
-            Preferences.remove("screenRecordingPermissionSkipped")
-            App.app.restart()
+/// builds the "Sharing with" submenu on open, so it always reflects the current Group list
+class SharingMenuDelegate: NSObject, NSMenuDelegate {
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        let current = Preferences.sharingWithGroup
+        let none = NSMenuItem(title: NSLocalizedString("Not sharing", comment: "Menubar option"), action: #selector(pick(_:)), keyEquivalent: "")
+        none.target = self
+        none.representedObject = ""
+        none.state = current.isEmpty ? .on : .off
+        menu.addItem(none)
+        menu.addItem(NSMenuItem.separator())
+        for group in Preferences.windowGroups {
+            let item = NSMenuItem(title: group.name, action: #selector(pick(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = group.id
+            item.state = group.id == current ? .on : .off
+            item.image = NSColor(windowGroupHex: group.color).map { NSImage.windowGroupDot($0, 10) }
+            menu.addItem(item)
         }
-        self.init([label, button], .vertical, true, top: 8, right: 15, bottom: 10, left: 15)
-        wantsLayer = true
-        layer!.backgroundColor = NSColor.purple.cgColor
+    }
+
+    @objc func pick(_ sender: NSMenuItem) {
+        let id = sender.representedObject as? String ?? ""
+        guard id != Preferences.sharingWithGroup else { return }
+        Logger.info("sharing session changed", id.isEmpty ? "not sharing" : sender.title)
+        Preferences.set("sharingWithGroup", id)
+        Menubar.applySharingState()
+        if App.app.appIsBeingUsed {
+            App.app.refreshOpenUi([], .refreshUiAfterExternalEvent)
+        }
     }
 }

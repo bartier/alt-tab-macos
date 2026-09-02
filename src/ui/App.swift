@@ -171,10 +171,6 @@ class App: AppCenterApplication {
         focusTarget()
     }
 
-    @objc func checkForUpdatesNow(_ sender: NSMenuItem) {
-        PoliciesTab.checkForUpdatesNow(sender)
-    }
-
     @objc func checkPermissions(_ sender: NSMenuItem) {
         permissionsWindow.show({})
     }

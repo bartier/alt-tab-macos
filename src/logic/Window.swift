@@ -230,22 +230,26 @@ class Window {
         return application.displayName
     }
 
-    // applies the first matching user-defined override rule (by table order);
-    // returns nil when no rule matches. Does not mutate `title`.
-    private func matchedReplacement() -> String? {
-        let raw = title ?? ""
-        let appId = application.bundleIdentifier ?? ""
-        for rule in Preferences.titleOverrides where !rule.pattern.isEmpty {
-            if !rule.bundleIdentifier.isEmpty && !appId.hasPrefix(rule.bundleIdentifier) { continue }
-            let hit: Bool
-            switch rule.matchType {
-                case .contains: hit = raw.contains(rule.pattern)
-                case .exact: hit = raw == rule.pattern
-                case .regex: hit = raw.range(of: rule.pattern, options: .regularExpression) != nil
-            }
-            if hit { return rule.replacement }
+    private var cachedResolution: (title: String?, generation: Int, value: GroupResolution)?
+
+    /// resolves the first matching title override (by table order) and the Group it assigns.
+    /// Memoized per title and preferences generation: sorting and display ask for it many times per refresh
+    private func resolution() -> GroupResolution {
+        if let cached = cachedResolution, cached.title == title, cached.generation == Preferences.generation {
+            return cached.value
         }
-        return nil
+        let value = WindowGroups.resolve(bundleIdentifier: application.bundleIdentifier, title: title, rules: Preferences.titleOverrides.map { $0.rule }, groups: Preferences.windowGroups)
+        cachedResolution = (title, Preferences.generation, value)
+        return value
+    }
+
+    private func matchedReplacement() -> String? {
+        return resolution().replacement
+    }
+
+    /// the Group this window belongs to; nil is Unknown
+    func group() -> WindowGroup? {
+        return resolution().group
     }
 
     // applies the first matching user-defined override rule to the raw title;

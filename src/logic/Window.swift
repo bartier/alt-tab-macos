@@ -258,8 +258,9 @@ class Window {
     func displayTitle() -> String {
         let raw = title ?? ""
         guard let replacement = matchedReplacement() else { return raw }
+        // only windows of the same app compete for a label: a cmux "ME" and a Chrome "ME" are told apart by the app already
         let hasSibling = Windows.list.contains { other in
-            other !== self && other.shouldShowTheUser && other.matchedReplacement() == replacement
+            other !== self && other.shouldShowTheUser && other.application.bundleIdentifier == application.bundleIdentifier && other.matchedReplacement() == replacement
         }
         guard hasSibling else { return replacement }
         let maxPrefixLen = 30

@@ -97,6 +97,7 @@ class App: AppCenterApplication {
     func hideThumbnailPanelWithoutChangingKeyWindow() {
         preferencesWindow.canBecomeKey_ = false
         feedbackWindow.canBecomeKey_ = false
+        ThumbnailsMirror.hide()
         thumbnailsPanel.orderOut(nil)
         preferencesWindow.canBecomeKey_ = true
         feedbackWindow.canBecomeKey_ = true
@@ -217,6 +218,7 @@ class App: AppCenterApplication {
             Windows.cycleFocusedWindowIndex(direction.step(), allowWrap: allowWrap)
         }
         userNavigatedThisSummon = true
+        ThumbnailsMirror.setNeedsRefresh()
     }
 
     func previousWindowShortcutWithRepeatingKey() {
@@ -241,6 +243,8 @@ class App: AppCenterApplication {
         let referenceWindow = window.referenceWindowForTabbedWindow()
         guard let position = referenceWindow?.position, let size = referenceWindow?.size else { return }
         let point = CGPoint(x: position.x + size.width / 2, y: position.y + size.height / 2)
+        // only move the cursor when it would change screen; within the same screen, the user's cursor position is left alone
+        if let cursorScreen = NSScreen.withMouse(), NSScreen.withPointInQuartzCoordinates(point) == cursorScreen { return }
         CGWarpMouseCursorPosition(point)
     }
 
@@ -264,6 +268,7 @@ class App: AppCenterApplication {
         thumbnailsPanel.display()
         guard appIsBeingUsed else { return }
         NSScreen.preferred.repositionPanel(thumbnailsPanel)
+        ThumbnailsMirror.setNeedsRefresh()
         guard appIsBeingUsed else { return }
         Windows.voiceOverWindow() // at this point ThumbnailViews are assigned to the window, and ready
         guard appIsBeingUsed else { return }
@@ -368,6 +373,7 @@ class App: AppCenterApplication {
         refreshOpenUi([], .showUi)
         guard appIsBeingUsed else { return }
         thumbnailsPanel.show()
+        ThumbnailsMirror.setNeedsRefresh()
         refreshOpenUi(Windows.list, .refreshOnlyThumbnailsAfterShowUi)
         // After showing, re-evaluate once more shortly after to catch any late front-app changes
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(140)) {

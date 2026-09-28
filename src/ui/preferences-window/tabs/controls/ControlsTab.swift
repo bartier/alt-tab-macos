@@ -126,6 +126,10 @@ class ControlsTab {
             Preferences.indexToName("screensToShow", index),
             ScreensToShowPreference.allCases
         )
+        let workspacesToShow = LabelAndControl.makeDropdown(
+            Preferences.indexToName("workspacesToShow", index),
+            WorkspacesToShowPreference.allCases
+        )
         let showMinimizedWindows = LabelAndControl.makeDropdown(
             Preferences.indexToName("showMinimizedWindows", index),
             ShowHowPreference.allCases
@@ -183,6 +187,10 @@ class ControlsTab {
         table.addRow(
           leftViews: [ TableGroupView.makeText(NSLocalizedString("Show windows from screens", comment: "")) ],
           rightViews: [ screensToShow ]
+        )
+        table.addRow(
+          leftViews: [ TableGroupView.makeText(NSLocalizedString("Show windows from workspaces", comment: "")) ],
+          rightViews: [ workspacesToShow ]
         )
         table.addRow(
           TableGroupView.Row(

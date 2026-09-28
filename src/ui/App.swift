@@ -188,6 +188,7 @@ class App: AppCenterApplication {
     }
 
     @objc func showPreferencesWindow() {
+        WindowsTab.reload()
         showSecondaryWindow(preferencesWindow)
     }
 
@@ -212,7 +213,9 @@ class App: AppCenterApplication {
     }
 
     func cycleSelection(_ direction: Direction, allowWrap: Bool = true) {
-        if direction == .up || direction == .down {
+        if thumbnailsPanel.thumbnailsView.isColumnLayout && [.up, .down, .left, .right].contains(direction) {
+            thumbnailsPanel.thumbnailsView.navigateColumns(direction, allowWrap: allowWrap)
+        } else if direction == .up || direction == .down {
             thumbnailsPanel.thumbnailsView.navigateUpOrDown(direction, allowWrap: allowWrap)
         } else {
             Windows.cycleFocusedWindowIndex(direction.step(), allowWrap: allowWrap)
@@ -432,6 +435,8 @@ extension App: NSApplicationDelegate {
             ScreensEvents.observe()
             SystemAppearanceEvents.observe()
             SystemScrollerStyleEvents.observe()
+            Workspaces.initialize()
+            Menubar.refreshTitle()
             Applications.initialDiscovery()
             self.preferencesWindow = PreferencesWindow()
             self.feedbackWindow = FeedbackWindow()
@@ -454,7 +459,8 @@ extension App: NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         // symbolic hotkeys state persist after the app is quit; we restore this shortcut before quitting
-        setNativeCommandTabEnabled(true)
+        restoreNativeCommandTab()
+        Workspaces.save()
     }
 }
 

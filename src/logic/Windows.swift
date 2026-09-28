@@ -174,9 +174,11 @@ class Windows {
         if list.count > ThumbnailsView.recycledViews.count {
             ThumbnailsView.recycledViews.append(ThumbnailView())
         }
+        Workspaces.windowAppeared(window)
     }
 
     static func removeAndUpdateFocus(_ window: Window) {
+        Workspaces.windowRemoved(window)
         let removedWindowOldFocusOrder = window.lastFocusOrder
         list.removeAll {
             if $0.lastFocusOrder == removedWindowOldFocusOrder {
@@ -191,6 +193,7 @@ class Windows {
 
     static func updateLastFocus(_ otherWindowAxUiElement: AXUIElement, _ otherWindowWid: CGWindowID) -> [Window]? {
         if let focusedWindow = (list.first { $0.isEqualRobust(otherWindowAxUiElement, otherWindowWid) }) {
+            Workspaces.windowFocused(focusedWindow)
             let focusedWindowOldFocusOrder = focusedWindow.lastFocusOrder
             var windowsToRefresh = [focusedWindow]
             list.forEach {
@@ -496,6 +499,7 @@ class Windows {
                 !(!(Preferences.showMinimizedWindows[shortcutIndex] != .hide) && window.isMinimized) &&
                 !(Preferences.spacesToShow[shortcutIndex] == .visible && !Spaces.visibleSpaces.contains { visibleSpace in window.spaceIds.contains { $0 == visibleSpace } }) &&
                 !(Preferences.screensToShow[shortcutIndex] == .showingAltTab && !window.isOnScreen(NSScreen.preferred)) &&
+                Workspaces.isShown(window, Preferences.workspacesToShow[shortcutIndex]) &&
                 (Preferences.showTabsAsWindows || !window.isTabbed))
     }
 

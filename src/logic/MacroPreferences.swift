@@ -383,6 +383,20 @@ enum SpacesToShowPreference: CaseIterable, MacroPreference {
     }
 }
 
+enum WorkspacesToShowPreference: CaseIterable, MacroPreference {
+    case all
+    case active
+    case activeAndUnassigned
+
+    var localizedString: LocalizedString {
+        switch self {
+            case .all: return NSLocalizedString("All workspaces", comment: "")
+            case .active: return NSLocalizedString("Active workspace", comment: "")
+            case .activeAndUnassigned: return NSLocalizedString("Active workspace + unassigned", comment: "")
+        }
+    }
+}
+
 enum ScreensToShowPreference: CaseIterable, MacroPreference {
     case all
     case showingAltTab

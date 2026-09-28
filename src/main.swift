@@ -31,7 +31,7 @@ func printStackTrace() {
 
 // during an emergency exit, we re-enable the native command+tab, and log
 fileprivate func emergencyExit(_ logs: Any?...) {
-    setNativeCommandTabEnabled(true)
+    restoreNativeCommandTab()
     print(logs)
     printStackTrace()
     exit(0)

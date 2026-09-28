@@ -4,6 +4,8 @@ class Menubar {
     static var statusItem: NSStatusItem!
     static var menu: NSMenu!
     static var permissionCalloutMenuItems: [NSMenuItem]?
+    private static var workspaceMenuItems = [NSMenuItem]()
+    private static let workspaceActions = WorkspaceMenuActions()
 
     static func initialize() {
         menu = NSMenu()
@@ -69,8 +71,47 @@ class Menubar {
         if let type = NSApp.currentEvent?.type, type != .leftMouseDown {
             App.app.showUi()
         } else {
+            rebuildWorkspaceItems()
             statusItem.popUpMenu(Menubar.menu)
         }
+    }
+
+    /// shows the active Workspace next to the icon, so the user always knows which context they're in
+    static func refreshTitle() {
+        guard let statusItem, let button = statusItem.button else { return }
+        if let active = Workspaces.active {
+            statusItem.length = NSStatusItem.variableLength
+            button.title = active.name
+            button.imagePosition = .imageLeft
+        } else {
+            statusItem.length = NSStatusItem.squareLength
+            button.title = ""
+            button.imagePosition = .imageOnly
+        }
+    }
+
+    /// the Workspaces section is rebuilt each time the menu opens, since Workspaces can change
+    private static func rebuildWorkspaceItems() {
+        workspaceMenuItems.forEach { menu.removeItem($0) }
+        var items = [NSMenuItem]()
+        let workspaces = Preferences.workspaces
+        let activeId = Workspaces.active?.id
+        let header = NSMenuItem(title: NSLocalizedString("Workspaces", comment: "Menubar section"), action: nil, keyEquivalent: "")
+        header.isEnabled = false
+        items.append(header)
+        for workspace in workspaces {
+            items.append(workspaceActions.item(workspace.name, #selector(WorkspaceMenuActions.activate(_:)), workspace.id, workspace.id == activeId))
+        }
+        items.append(workspaceActions.item(NSLocalizedString("No workspace", comment: "Menubar option"), #selector(WorkspaceMenuActions.activate(_:)), nil, activeId == nil))
+        items.append(workspaceActions.item(NSLocalizedString("Manage windows…", comment: "Menubar option"), #selector(WorkspaceMenuActions.manageWindows), nil, false))
+        items.append(workspaceActions.item(NSLocalizedString("Manage workspaces and groups…", comment: "Menubar option"), #selector(WorkspaceMenuActions.manage), nil, false))
+        items.append(NSMenuItem.separator())
+        // keep the permission callout on top when it's shown
+        let offset = menu.items.prefix { permissionCalloutMenuItems?.contains($0) ?? false }.count
+        for (i, item) in items.enumerated() {
+            menu.insertItem(item, at: offset + i)
+        }
+        workspaceMenuItems = items
     }
 
     static func menubarIconCallback(_: NSControl?) {
@@ -91,6 +132,30 @@ class Menubar {
         statusItem.button!.image = image
         statusItem.isVisible = true
         statusItem.button!.imageScaling = .scaleProportionallyUpOrDown
+    }
+}
+
+class WorkspaceMenuActions: NSObject {
+    func item(_ title: String, _ action: Selector, _ workspaceId: String?, _ isOn: Bool) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        item.target = self
+        item.representedObject = workspaceId
+        item.state = isOn ? .on : .off
+        return item
+    }
+
+    @objc func activate(_ sender: NSMenuItem) {
+        Workspaces.activate(sender.representedObject as? String)
+    }
+
+    @objc func manageWindows() {
+        App.app.preferencesWindow.selectTab("windows")
+        App.app.showPreferencesWindow()
+    }
+
+    @objc func manage() {
+        App.app.preferencesWindow.selectTab("workspaces")
+        App.app.showPreferencesWindow()
     }
 }
 

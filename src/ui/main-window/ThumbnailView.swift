@@ -468,6 +468,11 @@ class ThumbnailView: FlippedView {
             return appName
         }
 
+        // Group columns are narrow: the app icon identifies the app, so the label is only the window title
+        if ThumbnailView.columnCellWidth != nil {
+            return windowTitle.isEmpty ? appName : windowTitle
+        }
+
         // Windows view: always show "App Name: Window Title" so labels stay stable
         // regardless of how many windows the app has; skip the title when it's
         // empty or just repeats the app name (bestEffortTitle falls back to it)
@@ -533,12 +538,17 @@ class ThumbnailView: FlippedView {
         return shadow
     }
 
+    /// set while the switcher is laid out in Group columns: cells take the column width
+    static var columnCellWidth: CGFloat?
+
     static func maxThumbnailWidth() -> CGFloat {
+        if let columnCellWidth { return columnCellWidth }
         return ThumbnailsPanel.maxThumbnailsWidth() * Appearance.windowMaxWidthInRow - Appearance.interCellPadding * 2
     }
 
     static func minThumbnailWidth() -> CGFloat {
-        return ThumbnailsPanel.maxThumbnailsWidth() * Appearance.windowMinWidthInRow - Appearance.interCellPadding * 2
+        let width = ThumbnailsPanel.maxThumbnailsWidth() * Appearance.windowMinWidthInRow - Appearance.interCellPadding * 2
+        return columnCellWidth.map { min($0, width) } ?? width
     }
 
     /// The maximum height that a thumbnail can be drawn

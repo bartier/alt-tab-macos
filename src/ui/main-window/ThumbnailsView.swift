@@ -4,8 +4,13 @@ class ThumbnailsView: NSVisualEffectView {
     let scrollView = ScrollView()
     let spaceLegendView = SpaceLegendView()
     let searchFieldView = SearchFieldView()
+    let workspaceTitleView = WorkspaceTitleView()
     static var recycledViews = [ThumbnailView]()
     var rows = [[ThumbnailView]]()
+    /// when Groups are configured, windows are laid out in one column per Group, instead of wrapping rows
+    private(set) var isColumnLayout = false
+    var columns = [[ThumbnailView]]()
+    private var columnHeaders = [NSTextField]()
     static var thumbnailsWidth = CGFloat(0.0)
     static var thumbnailsHeight = CGFloat(0.0)
 
@@ -16,6 +21,7 @@ class ThumbnailsView: NSVisualEffectView {
         state = .active
         wantsLayer = true
         updateRoundedCorners(Appearance.windowCornerRadius)
+        addSubview(workspaceTitleView)
         addSubview(searchFieldView)
         addSubview(spaceLegendView)
         addSubview(scrollView)
@@ -107,25 +113,126 @@ class ThumbnailsView: NSVisualEffectView {
         }
     }
 
+    /// arrows move between columns (left/right) and within a column (up/down)
+    func navigateColumns(_ direction: Direction, allowWrap: Bool = true) {
+        guard let column = Windows.focusedWindow()?.rowIndex, columns.indices.contains(column) else { return }
+        let isRepeat = ATShortcut.lastEventIsARepeat || KeyRepeatTimer.timer?.isValid ?? false
+        let focusedView = ThumbnailsView.recycledViews[Windows.focusedWindowIndex]
+        let rowInColumn = columns[column].firstIndex(of: focusedView) ?? 0
+        var target: ThumbnailView?
+        if direction == .up || direction == .down {
+            let views = columns[column]
+            var next = rowInColumn + (direction == .down ? 1 : -1)
+            if next < 0 || next >= views.count {
+                guard allowWrap && !isRepeat else { return }
+                next = (next + views.count) % views.count
+            }
+            target = views[next]
+        } else {
+            var next = column
+            for _ in 0..<columns.count {
+                next += direction.step()
+                if next < 0 || next >= columns.count {
+                    guard allowWrap && !isRepeat else { return }
+                    next = (next + columns.count) % columns.count
+                }
+                if !columns[next].isEmpty { break }
+            }
+            guard next != column && !columns[next].isEmpty else { return }
+            target = columns[next][min(rowInColumn, columns[next].count - 1)]
+        }
+        if let target, let index = ThumbnailsView.recycledViews.firstIndex(of: target) {
+            Windows.updateFocusedAndHoveredWindowIndex(index)
+        }
+    }
+
     func updateItemsAndLayout() {
         let widthMax = ThumbnailsPanel.maxThumbnailsWidth().rounded()
+        workspaceTitleView.refresh()
         searchFieldView.refresh()
         spaceLegendView.refresh()
-        if let (maxX, maxY, labelHeight) = layoutThumbnailViews(widthMax) {
+        isColumnLayout = WindowGroups.isEnabled
+        ThumbnailView.columnCellWidth = nil
+        let layout = isColumnLayout ? layoutColumns(widthMax) : layoutThumbnailViews(widthMax)
+        if let (maxX, maxY, labelHeight) = layout {
             layoutParentViews(maxX, widthMax, maxY, labelHeight)
-            if Preferences.alignThumbnails == .center {
+            if !isColumnLayout && Preferences.alignThumbnails == .center {
                 centerRows(maxX)
             }
             for row in rows {
                 for (j, view) in row.enumerated() {
-                    view.numberOfViewsInRow = row.count
-                    view.isFirstInRow = j == 0
-                    view.isLastInRow = j == row.count - 1
-                    view.indexInRow = j
+                    // in a column, each cell is alone on its line
+                    view.numberOfViewsInRow = isColumnLayout ? 1 : row.count
+                    view.isFirstInRow = isColumnLayout || j == 0
+                    view.isLastInRow = isColumnLayout || j == row.count - 1
+                    view.indexInRow = isColumnLayout ? 0 : j
                 }
             }
             highlightStartView()
         }
+    }
+
+    /// one column per Group, in preference order, then Ungrouped. Empty columns are kept so each Group
+    /// stays at the same place. Within a column, windows keep the list order (e.g. most recent first)
+    private func layoutColumns(_ widthMax: CGFloat) -> (CGFloat, CGFloat, CGFloat)? {
+        let names = WindowGroups.columnNames
+        let count = CGFloat(names.count)
+        let padding = Appearance.interCellPadding
+        let columnGap = max(padding, Appearance.intraCellPadding * 2)
+        let columnWidth = ((widthMax - padding * 2 - columnGap * (count - 1)) / count).rounded(.down)
+        ThumbnailView.columnCellWidth = columnWidth
+        let labelHeight = ThumbnailsView.recycledViews.first!.label.cell!.cellSize.height
+        let height = ThumbnailView.height(labelHeight)
+        let headerHeight = (Appearance.fontHeight * 1.6).rounded()
+        columns = names.map { _ in [ThumbnailView]() }
+        var newViews = [NSView]()
+        for (index, window) in Windows.list.enumerated() {
+            guard App.app.appIsBeingUsed else { return nil }
+            guard window.shouldShowTheUser else { continue }
+            let view = ThumbnailsView.recycledViews[index]
+            view.updateRecycledCellWithNewContent(window, index, height)
+            let column = WindowGroups.columnIndex(window)
+            columns[column].append(view)
+            window.rowIndex = column
+            newViews.append(view)
+        }
+        let isLeftToRight = App.shared.userInterfaceLayoutDirection == .leftToRight
+        let totalWidth = padding * 2 + columnWidth * count + columnGap * (count - 1)
+        // at least one cell high, so empty columns still read as columns
+        var maxY = padding + headerHeight + padding + height + padding
+        for (i, column) in columns.enumerated() {
+            let x = padding + CGFloat(i) * (columnWidth + columnGap)
+            let columnX = isLeftToRight ? x : totalWidth - x - columnWidth
+            let header = columnHeader(i)
+            header.stringValue = names[i]
+            header.font = NSFont.systemFont(ofSize: Appearance.fontHeight, weight: .semibold)
+            header.textColor = Appearance.fontColor.withAlphaComponent(column.isEmpty ? 0.35 : 0.7)
+            header.alignment = isLeftToRight ? .left : .right
+            header.frame = NSRect(x: columnX + Appearance.edgeInsetsSize, y: padding,
+                width: columnWidth - Appearance.edgeInsetsSize * 2, height: headerHeight)
+            newViews.append(header)
+            var y = padding + headerHeight + padding
+            for view in column {
+                view.frame.origin = CGPoint(x: isLeftToRight ? columnX : columnX + columnWidth - view.frame.width, y: y)
+                y += height + padding
+            }
+            maxY = max(maxY, y)
+        }
+        rows = columns
+        scrollView.documentView!.subviews = newViews
+        return (totalWidth, maxY, labelHeight)
+    }
+
+    private func columnHeader(_ index: Int) -> NSTextField {
+        while columnHeaders.count <= index {
+            let label = NSTextField(labelWithString: "")
+            label.lineBreakMode = .byTruncatingTail
+            label.isEditable = false
+            label.isBordered = false
+            label.drawsBackground = false
+            columnHeaders.append(label)
+        }
+        return columnHeaders[index]
     }
 
     private func layoutThumbnailViews(_ widthMax: CGFloat) -> (CGFloat, CGFloat, CGFloat)? {
@@ -197,9 +304,12 @@ class ThumbnailsView: NSVisualEffectView {
         // the panel must fit whichever is wider, or the legend chips overflow past the panel edges
         let legendWidth = spaceLegendView.isHidden ? 0 : min(spaceLegendView.fittingWidth.rounded(.up), widthMax)
         let searchWidth = searchFieldView.isHidden ? 0 : min(searchFieldView.fittingWidth.rounded(.up), widthMax)
-        let contentWidth = max(ThumbnailsView.thumbnailsWidth, legendWidth, searchWidth)
+        let titleHeight = workspaceTitleView.isHidden ? 0 : workspaceTitleView.preferredHeight
+        let titleGap = workspaceTitleView.isHidden ? 0 : Appearance.intraCellPadding
+        let titleWidth = workspaceTitleView.isHidden ? 0 : min(workspaceTitleView.fittingWidth.rounded(.up), widthMax)
+        let contentWidth = max(ThumbnailsView.thumbnailsWidth, legendWidth, searchWidth, titleWidth)
         let frameWidth = contentWidth + Appearance.windowPadding * 2
-        var frameHeight = ThumbnailsView.thumbnailsHeight + Appearance.windowPadding * 2 + legendHeight + legendGap + searchHeight + searchGap
+        var frameHeight = ThumbnailsView.thumbnailsHeight + Appearance.windowPadding * 2 + legendHeight + legendGap + searchHeight + searchGap + titleHeight + titleGap
         let originX = Appearance.windowPadding + ((contentWidth - ThumbnailsView.thumbnailsWidth) / 2).rounded()
         var originY = Appearance.windowPadding
         if Preferences.appearanceStyle == .appIcons {
@@ -208,18 +318,21 @@ class ThumbnailsView: NSVisualEffectView {
             originY = originY - Appearance.intraCellPadding - labelHeight
         }
         frame.size = NSSize(width: frameWidth, height: frameHeight)
-        // ThumbnailsView is not flipped: y=0 is bottom, so the search field and the legend go
-        // near the top of the frame, the search field being the topmost row.
+        // ThumbnailsView is not flipped: y=0 is bottom, so the workspace title, the search field and the legend
+        // go near the top of the frame, the workspace title being the topmost row.
+        workspaceTitleView.frame = NSRect(x: Appearance.windowPadding,
+            y: frameHeight - Appearance.windowPadding - titleHeight,
+            width: contentWidth, height: titleHeight)
         searchFieldView.frame = NSRect(x: Appearance.windowPadding,
-            y: frameHeight - Appearance.windowPadding - searchHeight,
+            y: frameHeight - Appearance.windowPadding - titleHeight - titleGap - searchHeight,
             width: contentWidth, height: searchHeight)
         spaceLegendView.frame = NSRect(x: Appearance.windowPadding,
-            y: frameHeight - Appearance.windowPadding - searchHeight - searchGap - legendHeight,
+            y: frameHeight - Appearance.windowPadding - titleHeight - titleGap - searchHeight - searchGap - legendHeight,
             width: contentWidth, height: legendHeight)
         scrollView.frame.size = NSSize(width: min(maxX, widthMax), height: min(maxY, heightMax))
         scrollView.frame.origin = CGPoint(x: originX, y: originY)
         scrollView.contentView.frame.size = scrollView.frame.size
-        if App.shared.userInterfaceLayoutDirection == .rightToLeft {
+        if App.shared.userInterfaceLayoutDirection == .rightToLeft && !isColumnLayout {
             let croppedWidth = widthMax - maxX
             scrollView.documentView!.subviews.forEach { $0.frame.origin.x -= croppedWidth }
         }
@@ -509,6 +622,50 @@ class SearchFieldView: NSView {
             label.stringValue = query
             label.textColor = Appearance.fontColor
         }
+    }
+}
+
+/// names the active Workspace, when the current shortcut only shows that Workspace
+class WorkspaceTitleView: NSView {
+    private let label = NSTextField(labelWithString: "")
+
+    var preferredHeight: CGFloat {
+        return (Appearance.fontHeight * 1.6).rounded()
+    }
+
+    var fittingWidth: CGFloat {
+        return label.fittingSize.width + Appearance.windowPadding * 2
+    }
+
+    convenience init() {
+        self.init(frame: .zero)
+        wantsLayer = true
+        layer?.masksToBounds = true
+        label.lineBreakMode = .byTruncatingTail
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+        let centerXConstraint = label.centerXAnchor.constraint(equalTo: centerXAnchor)
+        let trailingConstraint = label.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor)
+        // optional, so a transiently zero-width frame is not a constraint conflict
+        centerXConstraint.priority = .defaultHigh
+        trailingConstraint.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            centerXConstraint,
+            label.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor),
+            trailingConstraint,
+        ])
+    }
+
+    func refresh() {
+        guard Preferences.workspacesToShow[App.app.shortcutIndex] != .all, let active = Workspaces.active else {
+            isHidden = true
+            return
+        }
+        isHidden = false
+        label.font = NSFont.systemFont(ofSize: Appearance.fontHeight, weight: .bold)
+        label.textColor = Appearance.fontColor
+        label.stringValue = active.name
     }
 }
 

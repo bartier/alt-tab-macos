@@ -173,10 +173,23 @@ enum CGSSymbolicHotKey: Int, CaseIterable {
 @_silgen_name("CGSSetSymbolicHotKeyEnabled") @discardableResult
 func CGSSetSymbolicHotKeyEnabled(_ hotKey: CGSSymbolicHotKey.RawValue, _ isEnabled: Bool) -> CGError
 
+/// the setting is system-wide: an instance which quits before disabling it (e.g. while waiting for permissions)
+/// must not re-enable it, or it takes command+tab away from the instance which is running
+private var nativeCommandTabDisabledByThisInstance = false
+
 func setNativeCommandTabEnabled(_ isEnabled: Bool, _ hotkeys: [CGSSymbolicHotKey] = CGSSymbolicHotKey.allCases) {
+    if !isEnabled && !hotkeys.isEmpty {
+        nativeCommandTabDisabledByThisInstance = true
+    }
     for hotkey in hotkeys {
         CGSSetSymbolicHotKeyEnabled(hotkey.rawValue, isEnabled)
     }
+}
+
+/// on quit, give command+tab back to macOS, if this instance took it
+func restoreNativeCommandTab() {
+    guard nativeCommandTabDisabledByThisInstance else { return }
+    setNativeCommandTabEnabled(true)
 }
 
 /// get the display UUID with the active menubar (other menubar are dimmed)

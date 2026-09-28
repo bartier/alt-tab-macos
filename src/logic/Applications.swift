@@ -43,6 +43,7 @@ class Applications {
             }
             // comparing pid here can fail here, as it can be already nil; we use isEqual here to avoid the issue
             Applications.list.removeAll { $0.runningApplication.isEqual(tApp) }
+            Windows.list.filter { $0.application.runningApplication.isEqual(tApp) }.forEach { Workspaces.windowRemoved($0) }
             Windows.list.removeAll { $0.application.runningApplication.isEqual(tApp) }
         }
         if Windows.list.count == 0 {

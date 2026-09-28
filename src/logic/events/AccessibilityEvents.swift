@@ -166,6 +166,7 @@ fileprivate func windowTitleChanged(_ element: AXUIElement) throws {
                         window.title = window.bestEffortTitle(title)
                         window.isMinimized = isMinimized
                         window.isFullscreen = isFullscreen
+                        Workspaces.windowTitleChanged(window)
                         App.app.refreshOpenUi([window], .refreshUiAfterExternalEvent)
                     }
                 }

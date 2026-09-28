@@ -70,6 +70,10 @@ class Preferences {
         "screensToShow2": ScreensToShowPreference.all.indexAsString,
         "screensToShow3": ScreensToShowPreference.all.indexAsString,
         "screensToShow4": ScreensToShowPreference.all.indexAsString,
+        "workspacesToShow": WorkspacesToShowPreference.active.indexAsString,
+        "workspacesToShow2": WorkspacesToShowPreference.active.indexAsString,
+        "workspacesToShow3": WorkspacesToShowPreference.all.indexAsString,
+        "workspacesToShow4": WorkspacesToShowPreference.all.indexAsString,
         "fadeOutAnimation": "false",
         "previewFadeInAnimation": "true",
         "hideSpaceNumberLabels": "false",
@@ -80,6 +84,8 @@ class Preferences {
         "language": LanguagePreference.systemDefault.indexAsString,
         "blacklist": defaultBlacklist(),
         "titleOverrides": "[]",
+        "workspaces": "[]",
+        "groups": GroupEntry.defaults(),
         "updatePolicy": UpdatePolicyPreference.autoCheck.indexAsString,
         "crashPolicy": CrashPolicyPreference.ask.indexAsString,
         "shortcutStyle": ShortcutStylePreference.focusOnRelease.indexAsString,
@@ -135,6 +141,8 @@ class Preferences {
     static var startAtLogin: Bool { CachedUserDefaults.bool("startAtLogin") }
     static var blacklist: [BlacklistEntry] { CachedUserDefaults.json("blacklist", [BlacklistEntry].self) }
     static var titleOverrides: [TitleOverrideEntry] { CachedUserDefaults.json("titleOverrides", [TitleOverrideEntry].self) }
+    static var workspaces: [WorkspaceEntry] { CachedUserDefaults.json("workspaces", [WorkspaceEntry].self) }
+    static var groups: [GroupEntry] { CachedUserDefaults.json("groups", [GroupEntry].self) }
     static var previewFocusedWindow: Bool { CachedUserDefaults.bool("previewFocusedWindow") }
     static var screenRecordingPermissionSkipped: Bool { CachedUserDefaults.bool("screenRecordingPermissionSkipped") }
 
@@ -164,6 +172,7 @@ class Preferences {
     static var appsToShow: [AppsToShowPreference] { ["appsToShow", "appsToShow2", "appsToShow3", "appsToShow4"].map { CachedUserDefaults.macroPref($0, AppsToShowPreference.allCases) } }
     static var spacesToShow: [SpacesToShowPreference] { ["spacesToShow", "spacesToShow2", "spacesToShow3", "spacesToShow4"].map { CachedUserDefaults.macroPref($0, SpacesToShowPreference.allCases) } }
     static var screensToShow: [ScreensToShowPreference] { ["screensToShow", "screensToShow2", "screensToShow3", "screensToShow4"].map { CachedUserDefaults.macroPref($0, ScreensToShowPreference.allCases) } }
+    static var workspacesToShow: [WorkspacesToShowPreference] { ["workspacesToShow", "workspacesToShow2", "workspacesToShow3", "workspacesToShow4"].map { CachedUserDefaults.macroPref($0, WorkspacesToShowPreference.allCases) } }
     static var showMinimizedWindows: [ShowHowPreference] { ["showMinimizedWindows", "showMinimizedWindows2", "showMinimizedWindows3", "showMinimizedWindows4"].map { CachedUserDefaults.macroPref($0, ShowHowPreference.allCases) } }
     static var showHiddenWindows: [ShowHowPreference] { ["showHiddenWindows", "showHiddenWindows2", "showHiddenWindows3", "showHiddenWindows4"].map { CachedUserDefaults.macroPref($0, ShowHowPreference.allCases) } }
     static var showFullscreenWindows: [ShowHowPreference] { ["showFullscreenWindows", "showFullscreenWindows2", "showFullscreenWindows3", "showFullscreenWindows4"].map { CachedUserDefaults.macroPref($0, ShowHowPreference.allCases) } }
@@ -192,7 +201,7 @@ class Preferences {
     }
 
     static func set<T>(_ key: String, _ value: T) where T: Encodable {
-        let needsJsonEncoding = key == "blacklist" || key == "titleOverrides"
+        let needsJsonEncoding = key == "blacklist" || key == "titleOverrides" || key == "workspaces" || key == "groups"
         UserDefaults.standard.set(needsJsonEncoding ? jsonEncode(value) : value, forKey: key)
         CachedUserDefaults.cache.removeValue(forKey: key)
     }

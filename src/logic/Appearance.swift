@@ -67,6 +67,19 @@ class Appearance {
         } else {
             thumbnailsSize(isHorizontalScreen)
         }
+        if WindowGroups.isEnabled {
+            columnsSize()
+        }
+    }
+
+    /// Group columns share the panel width, so each window title gets a fraction of it; the size
+    /// preference widens the panel instead of only growing the font
+    private static func columnsSize() {
+        switch currentSize {
+            case .small: maxWidthOnScreen = max(maxWidthOnScreen, 0.7)
+            case .medium: maxWidthOnScreen = max(maxWidthOnScreen, 0.85)
+            case .large: maxWidthOnScreen = max(maxWidthOnScreen, 0.95)
+        }
     }
 
     private static func updateTheme() {

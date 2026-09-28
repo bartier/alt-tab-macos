@@ -2,7 +2,6 @@ import Cocoa
 
 class PermissionsWindow: NSWindow {
     var accessibilityView: PermissionView!
-    var screenRecordingView: PermissionView!
 
     convenience init() {
         self.init(contentRect: .zero, styleMask: [.titled, .miniaturizable, .closable], backing: .buffered, defer: false)
@@ -13,16 +12,9 @@ class PermissionsWindow: NSWindow {
 
     func show(_ startupBlock: @escaping () -> Void) {
         accessibilityView.updatePermissionStatus(SystemPermissions.updateAccessibilityIsGranted())
-        if #available(macOS 10.15, *) {
-            screenRecordingView.updatePermissionStatus(SystemPermissions.updateScreenRecordingIsGranted())
-        }
         center()
         App.shared.activate(ignoringOtherApps: true)
         makeKeyAndOrderFront(nil)
-        if #available(macOS 10.15, *), !SystemPermissions.preStartupPermissionsPassed {
-            // this call triggers the permission prompt, however it's the only way to force the app to be listed with a checkbox
-            SLSRequestScreenCaptureAccess()
-        }
         SystemPermissions.pollPermissionsToUpdatePermissionsWindow(startupBlock)
     }
 
@@ -51,22 +43,10 @@ class PermissionsWindow: NSWindow {
             "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
             SystemPermissions.updateAccessibilityIsGranted
         )
-        var rows = [
+        let rows = [
             [header],
             [accessibilityView],
         ]
-        if #available(macOS 10.15, *) {
-            screenRecordingView = PermissionView(
-                "screen-recording",
-                NSLocalizedString("Screen Recording", comment: ""),
-                NSLocalizedString("This permission is needed to show thumbnails and preview of open windows", comment: ""),
-                NSLocalizedString("Open Screen Recording Preferences…", comment: ""),
-                "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
-                SystemPermissions.updateScreenRecordingIsGranted,
-                StackView(LabelAndControl.makeLabelWithCheckbox(NSLocalizedString("Use the app without this permission. Thumbnails won’t show.", comment: ""), "screenRecordingPermissionSkipped", labelPosition: .right))
-            )
-            rows.append([screenRecordingView])
-        }
         let view = GridView(rows as! [[NSView]])
         view.fit()
         setContentSize(view.fittingSize)
@@ -78,7 +58,7 @@ extension PermissionsWindow: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         Logger.debug(SystemPermissions.preStartupPermissionsPassed)
         if !SystemPermissions.preStartupPermissionsPassed {
-            if SystemPermissions.updateAccessibilityIsGranted() == .notGranted || SystemPermissions.updateScreenRecordingIsGranted() == .notGranted {
+            if SystemPermissions.updateAccessibilityIsGranted() == .notGranted {
                 Logger.error("Before using this app, you need to give permission in System Preferences > Security & Privacy > Privacy > Accessibility.",
                     "Please authorize and re-launch.",
                     "See https://help.rescuetime.com/article/59-how-do-i-enable-accessibility-permissions-on-mac-osx")

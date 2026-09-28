@@ -3,17 +3,12 @@ import Cocoa
 class Menubar {
     static var statusItem: NSStatusItem!
     static var menu: NSMenu!
-    static var permissionCalloutMenuItems: [NSMenuItem]?
     private static var workspaceMenuItems = [NSMenuItem]()
     private static let workspaceActions = WorkspaceMenuActions()
 
     static func initialize() {
         menu = NSMenu()
         menu.title = App.name // perf: prevent going through expensive code-path within appkit
-        let permissionCalloutMenuItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-        permissionCalloutMenuItem.view = PermissionCallout()
-        let calloutSeparator = NSMenuItem.separator()
-        permissionCalloutMenuItems = [permissionCalloutMenuItem, calloutSeparator]
         menu.addItem(
             withTitle: String(format: NSLocalizedString("About %@", comment: "Menubar option. %@ is AltTab"), App.name),
             action: #selector(App.app.showAboutTab),
@@ -52,18 +47,6 @@ class Menubar {
         statusItem.target = self
         statusItem.button!.action = #selector(statusItemOnClick)
         statusItem.button!.sendAction(on: [.leftMouseDown, .rightMouseDown])
-    }
-
-    // NSMenuItem.isHidden isn't reliable with custom views. We add/remove to hide/show these items
-    static func togglePermissionCallout(_ show: Bool) {
-        permissionCalloutMenuItems?.enumerated().forEach { offset, element in
-            if show && !menu.items.contains(element) {
-                menu.insertItem(element, at: offset)
-            }
-            if !show && menu.items.contains(element) {
-                menu.removeItem(element)
-            }
-        }
     }
 
     @objc static func statusItemOnClick() {
@@ -106,10 +89,8 @@ class Menubar {
         items.append(workspaceActions.item(NSLocalizedString("Manage windows…", comment: "Menubar option"), #selector(WorkspaceMenuActions.manageWindows), nil, false))
         items.append(workspaceActions.item(NSLocalizedString("Manage workspaces and groups…", comment: "Menubar option"), #selector(WorkspaceMenuActions.manage), nil, false))
         items.append(NSMenuItem.separator())
-        // keep the permission callout on top when it's shown
-        let offset = menu.items.prefix { permissionCalloutMenuItems?.contains($0) ?? false }.count
         for (i, item) in items.enumerated() {
-            menu.insertItem(item, at: offset + i)
+            menu.insertItem(item, at: i)
         }
         workspaceMenuItems = items
     }
@@ -156,26 +137,5 @@ class WorkspaceMenuActions: NSObject {
     @objc func manage() {
         App.app.preferencesWindow.selectTab("workspaces")
         App.app.showPreferencesWindow()
-    }
-}
-
-class PermissionCallout: StackView {
-    convenience init() {
-        let label = NSTextField(wrappingLabelWithString: NSLocalizedString("AltTab is running without Screen Recording permissions. Thumbnails won’t show.", comment: "Menubar callout"))
-        label.translatesAutoresizingMaskIntoConstraints = false
-        label.textColor = .white
-        label.preferredMaxLayoutWidth = 250
-        label.isSelectable = false
-        label.addOrUpdateConstraint(label.widthAnchor, 250)
-        let button = NSButton()
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.attributedTitle = NSAttributedString(string: NSLocalizedString("Grant permission", comment: "Menubar callout button"), attributes: [NSAttributedString.Key.foregroundColor: NSColor.white])
-        button.onAction = { _ in
-            Preferences.remove("screenRecordingPermissionSkipped")
-            App.app.restart()
-        }
-        self.init([label, button], .vertical, true, top: 8, right: 15, bottom: 10, left: 15)
-        wantsLayer = true
-        layer!.backgroundColor = NSColor.purple.cgColor
     }
 }

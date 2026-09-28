@@ -104,7 +104,6 @@ class Preferences {
         "hideWindowlessApps": "false",
         "hideThumbnails": "false",
         "previewFocusedWindow": "false",
-        "screenRecordingPermissionSkipped": "false",
     ]
 
     // system preferences
@@ -144,7 +143,6 @@ class Preferences {
     static var workspaces: [WorkspaceEntry] { CachedUserDefaults.json("workspaces", [WorkspaceEntry].self) }
     static var groups: [GroupEntry] { CachedUserDefaults.json("groups", [GroupEntry].self) }
     static var previewFocusedWindow: Bool { CachedUserDefaults.bool("previewFocusedWindow") }
-    static var screenRecordingPermissionSkipped: Bool { CachedUserDefaults.bool("screenRecordingPermissionSkipped") }
 
     // macro values
     static var appearanceStyle: AppearanceStylePreference { CachedUserDefaults.macroPref("appearanceStyle", AppearanceStylePreference.allCases) }

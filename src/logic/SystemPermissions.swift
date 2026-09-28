@@ -3,9 +3,9 @@ import Cocoa
 // macOS has some privacy restrictions. The user needs to grant certain permissions, app by app, in System Preferences > Security & Privacy
 class SystemPermissions {
     static var accessibilityPermission = PermissionStatus.notGranted
-    static var screenRecordingPermission = PermissionStatus.notGranted
+    /// this fork doesn't use Screen Recording: no thumbnails, no previews; it never asks for the permission
+    static let screenRecordingPermission = PermissionStatus.skipped
     static var preStartupPermissionsPassed = false
-    static var flakyCounter = 0
     static var timerPermissionsToUpdatePermissionsWindow: Timer?
     static var timerPermissionsRemovedWhileAltTabIsRunning: Timer?
 
@@ -14,7 +14,7 @@ class SystemPermissions {
             pollPermissionsRemovedWhileAltTabIsRunning()
             continueAppStartup()
         }
-        if updateAccessibilityIsGranted() != .notGranted && updateScreenRecordingIsGranted() != .notGranted {
+        if updateAccessibilityIsGranted() != .notGranted {
             preStartupPermissionsPassed = true
             startupBlock()
         } else {
@@ -48,12 +48,6 @@ class SystemPermissions {
         return accessibilityPermission
     }
 
-    @discardableResult
-    static func updateScreenRecordingIsGranted() -> PermissionStatus {
-        screenRecordingPermission = detectScreenRecordingIsGranted()
-        return screenRecordingPermission
-    }
-
     private static func detectAccessibilityIsGranted() -> PermissionStatus {
         if #available(macOS 10.9, *) {
             return AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeRetainedValue(): false] as CFDictionary) ? .granted : .notGranted
@@ -61,93 +55,31 @@ class SystemPermissions {
         return .granted
     }
 
-    private static func detectScreenRecordingIsGranted() -> PermissionStatus {
-        if #available(macOS 10.15, *) {
-            return screenRecordingIsGrantedOnSomeDisplay() ? .granted :
-                (Preferences.screenRecordingPermissionSkipped ? .skipped : .notGranted)
-        }
-        return .granted
-    }
-
     private static func checkPermissionsWhileAltTabIsRunning() {
-        Logger.debug(accessibilityPermission, screenRecordingPermission, preStartupPermissionsPassed, screenRecordingPermission, Appearance.hideThumbnails, Preferences.previewFocusedWindow)
         SystemPermissions.updateAccessibilityIsGranted()
         Logger.debug(accessibilityPermission)
         if accessibilityPermission == .notGranted {
             Logger.info("accessibilityPermission not granted; restarting")
             App.app.restart()
         }
-        if screenRecordingPermission == .skipped || (Appearance.hideThumbnails && !Preferences.previewFocusedWindow) { return }
-        SystemPermissions.updateScreenRecordingIsGranted()
-        Logger.debug(screenRecordingPermission)
-        Menubar.togglePermissionCallout(screenRecordingPermission == .skipped)
-        if screenRecordingPermission == .notGranted {
-            // permission check may yield a false negative during wake-up
-            // we restart after 2 negative checks
-            if flakyCounter >= 2 {
-                Logger.info("screenRecordingPermission not granted 3 times; restarting")
-                App.app.restart()
-            } else {
-                flakyCounter += 1
-            }
-        } else {
-            flakyCounter = 0
-        }
     }
 
     private static func checkPermissionsToUpdatePermissionsWindow(_ startupBlock: @escaping () -> Void) {
         updateAccessibilityIsGranted()
-        updateScreenRecordingIsGranted()
-        Logger.debug(accessibilityPermission, screenRecordingPermission, preStartupPermissionsPassed)
-        Menubar.togglePermissionCallout(screenRecordingPermission == .skipped)
+        Logger.debug(accessibilityPermission, preStartupPermissionsPassed)
         if accessibilityPermission != App.app.permissionsWindow?.accessibilityView?.permissionStatus {
             App.app.permissionsWindow?.accessibilityView.updatePermissionStatus(accessibilityPermission)
         }
-        if #available(macOS 10.15, *), screenRecordingPermission != App.app.permissionsWindow?.screenRecordingView?.permissionStatus {
-            App.app.permissionsWindow?.screenRecordingView?.updatePermissionStatus(screenRecordingPermission)
-        }
         if !preStartupPermissionsPassed {
-            if accessibilityPermission != .notGranted && screenRecordingPermission != .notGranted {
+            if accessibilityPermission != .notGranted {
                 preStartupPermissionsPassed = true
                 App.app.permissionsWindow?.close()
                 startupBlock()
             }
         } else {
-            if accessibilityPermission == .notGranted || screenRecordingPermission == .notGranted {
+            if accessibilityPermission == .notGranted {
                 App.app.restart()
             }
         }
-    }
-
-    // workaround: public API CGPreflightScreenCaptureAccess and private API SLSRequestScreenCaptureAccess exist, but
-    // their return value is not updated during the app lifetime
-    // note: shows the system prompt if there's no permission
-    private static func screenRecordingIsGrantedOnSomeDisplay() -> Bool {
-        let mainDisplayID = CGMainDisplayID()
-        if screenRecordingIsGrantedOnDisplay(mainDisplayID) {
-            return true
-        }
-        // maybe the main screen can't produce a CGDisplayStream, but another screen can
-        // a positive on any screen must mean that the permission is granted; we try on the other screens
-        for screen in NSScreen.screens {
-            if let id = screen.number(), id != mainDisplayID {
-                if screenRecordingIsGrantedOnDisplay(id) {
-                    return true
-                }
-            }
-        }
-        return false
-    }
-
-    private static func screenRecordingIsGrantedOnDisplay(_ displayId: CGDirectDisplayID) -> Bool {
-        return CGDisplayStream(
-            dispatchQueueDisplay: displayId,
-            outputWidth: 1,
-            outputHeight: 1,
-            pixelFormat: Int32(kCVPixelFormatType_32BGRA),
-            properties: nil,
-            queue: .global(),
-            handler: { _, _, _, _ in }
-        ) != nil
     }
 }

@@ -154,6 +154,12 @@ fileprivate let cgEventHandler: CGEventTapCallBack = { _, type, cgEvent, _ in
         // making ESC/W/M/arrows/etc. work even when a Command-based shortcut (e.g. Cmd+Tab) is held.
         if App.app.appIsBeingUsed {
             let keyCode = UInt32(cgEvent.getIntegerValueField(.keyboardEventKeycode))
+            if let workspaceIndex = WorkspaceSwitchKeys.workspaceIndex(cgEvent, keyCode) {
+                DispatchQueue.main.async {
+                    App.app.activateWorkspace(workspaceIndex)
+                }
+                return nil
+            }
             // type-to-search claims plain keystrokes before the "when active" shortcuts, so typing
             // "m" filters the list instead of minimizing the selected window. Shortcuts with a
             // modifier are untouched, and the feature is opt-out per shortcut in Preferences

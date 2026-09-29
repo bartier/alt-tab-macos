@@ -5,14 +5,14 @@ Window switcher for macOS, forked to separate windows from several employers so 
 ## Language
 
 **Workspace**:
-A project context the user works in: Me, or one of the employers' projects. A new window joins the Active Workspace. The user fixes or adds assignments in Preferences › Windows. Assignments survive restarts. A window can belong to several Workspaces, or to none. The user switches the active Workspace from the menu bar icon; switching brings its windows forward in the order they were last used.
+A project context the user works in: Me, or one of the employers' projects. A new window joins the Workspaces of the window it was opened from (its app's last focused window), else the Active Workspace. The user fixes or adds assignments in Preferences › Windows. Assignments survive restarts of AltTab, apps and the Mac; after a reboot a window is recognised by its app and its title override, or its title. An assignment whose window isn't open is kept and ignored. A window can belong to several Workspaces, or to none. The user switches the active Workspace from the menu bar icon, or with ⌘1…⌘9 while the switcher is open; switching brings its windows forward in the order they were last used.
 _Avoid_: Company, context, profile, Space (that's macOS's)
 
 **Active Workspace**:
-The Workspace the user is working in now. There is at most one. With none active, the switcher shows every window.
+The Workspace the user is working in now. There is at most one. With none active, the switcher shows every window, except in the Workspace search, which then shows none.
 
 **Unassigned**:
-A window that belongs to no Workspace: windows open before AltTab started that match no saved state, and new windows opened while no Workspace is active.
+A window that belongs to no Workspace: windows open before AltTab started that match no saved state, and new windows opened while no Workspace is active. Apps without windows count as Unassigned. A window stays Unassigned across AltTab restarts.
 _Avoid_: Unknown
 
 **Group**:
@@ -38,3 +38,8 @@ Shortcut 2 (Option+Tab). Windows of the active Workspace, in Group columns.
 
 **Everything list**:
 Shortcut 3 (Option+backtick). Windows of every Workspace, and Unassigned ones, in Group columns.
+
+**Workspace search**:
+Shortcut 4 (Option+Space). Windows of the active Workspace only; none if no Workspace is active. The switcher stays open on release, and typing filters by app name, title and title override; Enter focuses the selection, which starts on the Workspace's previous window.
+
+Lists showing one Workspace open even when it has no windows, naming it.

@@ -11,6 +11,9 @@ class ThumbnailsView: NSVisualEffectView {
     private(set) var isColumnLayout = false
     var columns = [[ThumbnailView]]()
     private var columnHeaders = [NSTextField]()
+    /// the column headers stay above the scrolling columns, so they're visible whatever the scroll position
+    private let columnHeadersView = FlippedView()
+    private var columnHeadersHeight = CGFloat(0)
     static var thumbnailsWidth = CGFloat(0.0)
     static var thumbnailsHeight = CGFloat(0.0)
 
@@ -24,6 +27,7 @@ class ThumbnailsView: NSVisualEffectView {
         addSubview(workspaceTitleView)
         addSubview(searchFieldView)
         addSubview(spaceLegendView)
+        addSubview(columnHeadersView)
         addSubview(scrollView)
         // TODO: think about this optimization more
         (1...20).forEach { _ in ThumbnailsView.recycledViews.append(ThumbnailView()) }
@@ -152,6 +156,7 @@ class ThumbnailsView: NSVisualEffectView {
         searchFieldView.refresh()
         spaceLegendView.refresh()
         isColumnLayout = WindowGroups.isEnabled
+        columnHeadersView.isHidden = !isColumnLayout
         ThumbnailView.columnCellWidth = nil
         let layout = isColumnLayout ? layoutColumns(widthMax) : layoutThumbnailViews(widthMax)
         if let (maxX, maxY, labelHeight) = layout {
@@ -199,7 +204,8 @@ class ThumbnailsView: NSVisualEffectView {
         let isLeftToRight = App.shared.userInterfaceLayoutDirection == .leftToRight
         let totalWidth = padding * 2 + columnWidth * count + columnGap * (count - 1)
         // at least one cell high, so empty columns still read as columns
-        var maxY = padding + headerHeight + padding + height + padding
+        var maxY = padding + height + padding
+        var headers = [NSView]()
         for (i, column) in columns.enumerated() {
             let x = padding + CGFloat(i) * (columnWidth + columnGap)
             let columnX = isLeftToRight ? x : totalWidth - x - columnWidth
@@ -210,8 +216,8 @@ class ThumbnailsView: NSVisualEffectView {
             header.alignment = isLeftToRight ? .left : .right
             header.frame = NSRect(x: columnX + Appearance.edgeInsetsSize, y: padding,
                 width: columnWidth - Appearance.edgeInsetsSize * 2, height: headerHeight)
-            newViews.append(header)
-            var y = padding + headerHeight + padding
+            headers.append(header)
+            var y = padding
             for view in column {
                 view.frame.origin = CGPoint(x: isLeftToRight ? columnX : columnX + columnWidth - view.frame.width, y: y)
                 y += height + padding
@@ -220,6 +226,8 @@ class ThumbnailsView: NSVisualEffectView {
         }
         rows = columns
         scrollView.documentView!.subviews = newViews
+        columnHeadersView.subviews = headers
+        columnHeadersHeight = padding + headerHeight
         return (totalWidth, maxY, labelHeight)
     }
 
@@ -293,7 +301,8 @@ class ThumbnailsView: NSVisualEffectView {
     }
 
     private func layoutParentViews(_ maxX: CGFloat, _ widthMax: CGFloat, _ maxY: CGFloat, _ labelHeight: CGFloat) {
-        let heightMax = ThumbnailsPanel.maxThumbnailsHeight()
+        let headersHeight = isColumnLayout ? columnHeadersHeight : 0
+        let heightMax = ThumbnailsPanel.maxThumbnailsHeight() - headersHeight
         ThumbnailsView.thumbnailsWidth = min(maxX, widthMax)
         ThumbnailsView.thumbnailsHeight = min(maxY, heightMax)
         let legendHeight = spaceLegendView.isHidden ? 0 : spaceLegendView.preferredHeight
@@ -309,7 +318,7 @@ class ThumbnailsView: NSVisualEffectView {
         let titleWidth = workspaceTitleView.isHidden ? 0 : min(workspaceTitleView.fittingWidth.rounded(.up), widthMax)
         let contentWidth = max(ThumbnailsView.thumbnailsWidth, legendWidth, searchWidth, titleWidth)
         let frameWidth = contentWidth + Appearance.windowPadding * 2
-        var frameHeight = ThumbnailsView.thumbnailsHeight + Appearance.windowPadding * 2 + legendHeight + legendGap + searchHeight + searchGap + titleHeight + titleGap
+        var frameHeight = ThumbnailsView.thumbnailsHeight + headersHeight + Appearance.windowPadding * 2 + legendHeight + legendGap + searchHeight + searchGap + titleHeight + titleGap
         let originX = Appearance.windowPadding + ((contentWidth - ThumbnailsView.thumbnailsWidth) / 2).rounded()
         var originY = Appearance.windowPadding
         if Preferences.appearanceStyle == .appIcons {
@@ -331,6 +340,7 @@ class ThumbnailsView: NSVisualEffectView {
             width: contentWidth, height: legendHeight)
         scrollView.frame.size = NSSize(width: min(maxX, widthMax), height: min(maxY, heightMax))
         scrollView.frame.origin = CGPoint(x: originX, y: originY)
+        columnHeadersView.frame = NSRect(x: originX, y: originY + scrollView.frame.height, width: scrollView.frame.width, height: headersHeight)
         scrollView.contentView.frame.size = scrollView.frame.size
         if App.shared.userInterfaceLayoutDirection == .rightToLeft && !isColumnLayout {
             let croppedWidth = widthMax - maxX
@@ -658,14 +668,20 @@ class WorkspaceTitleView: NSView {
     }
 
     func refresh() {
-        guard Preferences.workspacesToShow[App.app.shortcutIndex] != .all, let active = Workspaces.active else {
+        let preference = Preferences.workspacesToShow[App.app.shortcutIndex]
+        guard Workspaces.isFiltering(preference) else {
             isHidden = true
             return
         }
         isHidden = false
         label.font = NSFont.systemFont(ofSize: Appearance.fontHeight, weight: .bold)
         label.textColor = Appearance.fontColor
-        label.stringValue = active.name
+        guard let active = Workspaces.active else {
+            label.stringValue = NSLocalizedString("No active workspace", comment: "")
+            return
+        }
+        let isEmpty = !WindowSearch.isActive && !Windows.list.contains { $0.shouldShowTheUser }
+        label.stringValue = isEmpty ? String(format: NSLocalizedString("%@ — no windows", comment: ""), active.name) : active.name
     }
 }
 

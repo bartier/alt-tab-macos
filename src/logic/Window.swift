@@ -233,8 +233,11 @@ class Window {
     // applies the first matching user-defined override rule (by table order);
     // returns nil when no rule matches. Does not mutate `title`.
     private func matchedReplacement() -> String? {
-        let raw = title ?? ""
-        let appId = application.bundleIdentifier ?? ""
+        return Window.titleOverride(application.bundleIdentifier ?? "", title ?? "")
+    }
+
+    /// the replacement of the first user-defined override rule matching this app and raw title; nil when none matches
+    static func titleOverride(_ appId: String, _ raw: String) -> String? {
         for rule in Preferences.titleOverrides where !rule.pattern.isEmpty {
             if !rule.bundleIdentifier.isEmpty && !appId.hasPrefix(rule.bundleIdentifier) { continue }
             let hit: Bool

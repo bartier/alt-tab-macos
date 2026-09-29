@@ -387,12 +387,14 @@ enum WorkspacesToShowPreference: CaseIterable, MacroPreference {
     case all
     case active
     case activeAndUnassigned
+    case activeOnly
 
     var localizedString: LocalizedString {
         switch self {
             case .all: return NSLocalizedString("All workspaces", comment: "")
             case .active: return NSLocalizedString("Active workspace", comment: "")
             case .activeAndUnassigned: return NSLocalizedString("Active workspace + unassigned", comment: "")
+            case .activeOnly: return NSLocalizedString("Active workspace only (none if no workspace is active)", comment: "")
         }
     }
 }

@@ -1,4 +1,5 @@
 import Cocoa
+import Carbon.HIToolbox.Events
 
 /// a project context. The user assigns windows to it in Preferences › Windows; see CONTEXT.md
 struct WorkspaceEntry: Codable {
@@ -43,10 +44,27 @@ class WindowGroups {
     }
 }
 
+/// ⌘1…⌘9 in the switcher switch to the Workspace at that position in Preferences, as the menu bar does
+class WorkspaceSwitchKeys {
+    static let keyCodes = [kVK_ANSI_1, kVK_ANSI_2, kVK_ANSI_3, kVK_ANSI_4, kVK_ANSI_5, kVK_ANSI_6, kVK_ANSI_7, kVK_ANSI_8, kVK_ANSI_9]
+
+    /// called on the keyboard-events thread
+    static func workspaceIndex(_ cgEvent: CGEvent, _ keyCode: UInt32) -> Int? {
+        let flags = cgEvent.flags
+        guard flags.contains(.maskCommand) && !flags.contains(.maskControl) && !flags.contains(.maskShift),
+              let index = keyCodes.firstIndex(of: Int(keyCode)) else { return nil }
+        return index
+    }
+}
+
 /// which Workspaces each window belongs to, and which Workspace is active.
 /// This state is saved to disk so that restarting AltTab, an app, or the Mac doesn't lose it:
 /// - AltTab restarts: window ids are owned by the WindowServer and survive, so windows match exactly
-/// - app restarts / reboots: windows get new ids; restored windows are matched by app + title (+ frame to break ties)
+/// - app restarts / reboots: windows get new ids. A window with a title override (Preferences › Window Titles) is
+///   matched by app + override whenever it appears or gets that title; that name is stable, unlike raw titles
+///   (e.g. a Chrome window's title follows its tab, its override follows its profile). Other windows restored by
+///   their app are matched by app + raw title. Ties are broken by frame
+/// Saved windows which aren't open are kept until a window matches them
 class Workspaces {
     private struct SavedWindow: Codable {
         var wid: CGWindowID
@@ -67,24 +85,28 @@ class Workspaces {
         var focusOrders: [String: [CGWindowID]]?
     }
 
-    /// windows appearing this soon after AltTab launched existed before; they only join a Workspace if they match saved state
-    private static let discoveryDuration = 15.0
+    /// saved Unassigned windows only serve to recognise windows still open when AltTab restarts; after that, they're dropped
+    private static let discoveryDuration = 60.0
     /// windows appearing this soon after their app launched are likely restored by the app; they're matched by title
     private static let appRestoreDuration = 20.0
-    /// restored windows may get their final title a bit later (e.g. browsers); we keep trying to match them for that long
+    /// restored windows may get their final title a bit later (e.g. browsers, cmux); we keep trying to match them for that long
     private static let pendingMatchDuration = 30.0
-    private static let orphanMaxAge = 7.0 * 24 * 3600
     private static let orphanMaxCount = 500
 
     private static var launchedAt = Date().timeIntervalSince1970
+    /// windows open when AltTab launched existed before it; they only join a Workspace if they match saved state
+    private static var preExistingWids = Set<CGWindowID>()
     private static var bootTime = Double(0)
     private static var activeId: String?
     /// saved state of live windows, by window id
     private static var live = [CGWindowID: SavedWindow]()
     /// saved state of windows not currently open; candidates to re-match restored windows
     private static var orphans = [SavedWindow]()
-    /// restored windows we couldn't match yet, and when they appeared
+    /// windows which may be restored ones we couldn't match yet, and when they appeared
     private static var pending = [CGWindowID: Double]()
+    /// windows whose Workspaces came from saved state or from the user. The others (joined the active Workspace,
+    /// or Unassigned) take the saved Workspaces of a window with the same title override when they get its title
+    private static var settled = Set<CGWindowID>()
     /// each Workspace's windows, most recently focused first, counting only focus while that Workspace was active.
     /// Switching to a Workspace restores this order, so the switcher is as the user left it
     private static var focusOrders = [String: [CGWindowID]]()
@@ -106,6 +128,7 @@ class Workspaces {
     static func initialize() {
         launchedAt = Date().timeIntervalSince1970
         bootTime = currentBootTime()
+        preExistingWids = openWindowIds()
         isInitialized = true
         guard let data = try? Data(contentsOf: fileUrl) else {
             Logger.info("no saved workspaces state at", fileUrl.path)
@@ -118,11 +141,15 @@ class Workspaces {
         activeId = state.activeWorkspaceId
         let sameBoot = abs(state.bootTime - bootTime) < 60
         if sameBoot { focusOrders = state.focusOrders ?? [:] }
-        orphans = state.windows.map { saved in
+        orphans = state.windows.compactMap { saved in
             var saved = saved
             saved.closedAt = saved.closedAt ?? launchedAt
-            // after a reboot, ids mean nothing; only title matching can apply
-            if !sameBoot { saved.wid = 0 }
+            if !sameBoot {
+                // Unassigned windows are only recognised by id
+                if saved.workspaceIds.isEmpty { return nil }
+                // after a reboot, ids mean nothing; only title matching can apply
+                saved.wid = 0
+            }
             return saved
         }
         Logger.info("loaded workspaces state", "sameBoot:", sameBoot, "windows:", orphans.count, "active:", activeId ?? "nil")
@@ -157,7 +184,14 @@ class Workspaces {
             case .active: return isInActiveWorkspace(window)
             // windowless apps belong to no Workspace, but launching an app is part of working in any Workspace
             case .activeAndUnassigned: return isInActiveWorkspace(window) || isUnassigned(window)
+            // unlike .active, no active Workspace shows nothing: this list never shows another Workspace's windows
+            case .activeOnly: return active.map { workspaceIds(window).contains($0.id) } ?? false
         }
+    }
+
+    /// the shortcut shows one Workspace's windows, so an empty list still opens the switcher, naming that Workspace
+    static func isFiltering(_ preference: WorkspacesToShowPreference) -> Bool {
+        return preference == .activeOnly || (preference != .all && active != nil)
     }
 
     // MARK: - window lifecycle
@@ -171,14 +205,18 @@ class Workspaces {
             claim(i, window, "same window id")
             return
         }
-        let isPreExisting = now - launchedAt < discoveryDuration
+        if let i = bestOverrideMatch(bundleId, window) {
+            claim(i, window, "same app and title override")
+            return
+        }
+        let isPreExisting = preExistingWids.contains(wid)
         let isRestored = (window.application.runningApplication.launchDate?.timeIntervalSince1970).map { now - $0 < appRestoreDuration } ?? false
         if isPreExisting || isRestored {
             if let i = bestTitleMatch(bundleId, title, window) {
                 claim(i, window, "same app and title")
                 return
             }
-            if orphans.contains(where: { $0.bundleId == bundleId }) {
+            if orphans.contains(where: { $0.bundleId == bundleId && !$0.workspaceIds.isEmpty }) {
                 pending[wid] = now
                 live[wid] = saved(window, [])
                 Logger.info("window unassigned (restored by its app, waiting for its title to match)", wid, bundleId, title)
@@ -191,32 +229,62 @@ class Workspaces {
             }
             // an app launched fresh, with nothing to restore: its window is a new window
         }
+        // some apps restore their windows long after they launched, under a placeholder title (cmux restores when
+        // first activated, as "Terminal", then renames it). It joins the active Workspace for now, and still takes
+        // the saved Workspaces of a window with the same title if it gets one soon
+        if orphans.contains(where: { $0.bundleId == bundleId && !$0.workspaceIds.isEmpty }) {
+            pending[wid] = now
+        }
         joinActiveWorkspace(window)
     }
 
-    /// new windows join the active Workspace, so the switcher shows them right away
+    /// new windows join the Workspaces of the window they were opened from (e.g. a sign-in popup, a second window of
+    /// a Chrome profile), else the active Workspace, so the switcher shows them right away
     private static func joinActiveWorkspace(_ window: Window) {
         let wid = window.cgWindowId!
+        let bundleId = window.application.bundleIdentifier ?? ""
+        if let opener = opener(window), case let ids = workspaceIds(opener), !ids.isEmpty {
+            live[wid] = saved(window, ids)
+            ids.forEach { moveToFront(wid, $0) }
+            Logger.info("new window joined the workspaces of the window it was opened from", wid, bundleId, window.title ?? "", names(ids), "opener:", opener.cgWindowId ?? 0)
+            scheduleSave()
+            return
+        }
         guard let active else {
             live[wid] = saved(window, [])
-            Logger.info("new window unassigned (no active workspace)", wid, window.application.bundleIdentifier ?? "", window.title ?? "")
+            Logger.info("new window unassigned (no active workspace)", wid, bundleId, window.title ?? "")
             return
         }
         live[wid] = saved(window, [active.id])
         // its focus event may come before it joined; a new window is the most recent one anyway
         moveToFront(wid, active.id)
-        Logger.info("new window joined the active workspace", wid, window.application.bundleIdentifier ?? "", window.title ?? "", active.name)
+        Logger.info("new window joined the active workspace", wid, bundleId, window.title ?? "", active.name)
         scheduleSave()
     }
 
+    /// the window a new window was opened from: its app's last focused window, if the app is the one in use
+    private static func opener(_ window: Window) -> Window? {
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == window.application.pid else { return nil }
+        return Windows.list
+            .filter { $0 !== window && !$0.isWindowlessApp && $0.application.pid == window.application.pid }
+            .min { $0.lastFocusOrder < $1.lastFocusOrder }
+    }
+
+    private static func names(_ workspaceIds: [String]) -> [String] {
+        return workspaceIds.compactMap { id in Preferences.workspaces.first { $0.id == id }?.name }
+    }
+
     static func windowTitleChanged(_ window: Window) {
-        guard let wid = window.cgWindowId, let bundleId = window.application.bundleIdentifier else { return }
+        guard let wid = window.cgWindowId, let bundleId = window.application.bundleIdentifier, live[wid] != nil else { return }
+        if !settled.contains(wid), let i = bestOverrideMatch(bundleId, window) {
+            claim(i, window, "same app and title override, after title change")
+            App.app.refreshOpenUi([], .refreshUiAfterExternalEvent)
+            return
+        }
         if let appearedAt = pending[wid] {
             if Date().timeIntervalSince1970 - appearedAt > pendingMatchDuration {
                 pending.removeValue(forKey: wid)
             } else if let i = bestTitleMatch(bundleId, window.title ?? "", window) {
-                pending.removeValue(forKey: wid)
-                live.removeValue(forKey: wid)
                 claim(i, window, "same app and title, after title change")
                 App.app.refreshOpenUi([], .refreshUiAfterExternalEvent)
                 return
@@ -230,6 +298,7 @@ class Workspaces {
     static func windowRemoved(_ window: Window) {
         guard let wid = window.cgWindowId, var saved = live.removeValue(forKey: wid) else { return }
         pending.removeValue(forKey: wid)
+        settled.remove(wid)
         for id in focusOrders.keys {
             focusOrders[id]!.removeAll { $0 == wid }
         }
@@ -240,17 +309,38 @@ class Workspaces {
         scheduleSave()
     }
 
+    /// the window takes the saved Workspaces, replacing any it joined on its own
     private static func claim(_ orphanIndex: Int, _ window: Window, _ reason: String) {
+        let wid = window.cgWindowId!
         let orphan = orphans.remove(at: orphanIndex)
-        live[window.cgWindowId!] = saved(window, orphan.workspaceIds)
-        let names = orphan.workspaceIds.compactMap { id in Preferences.workspaces.first { $0.id == id }?.name }
-        Logger.info("window restored to workspaces", window.cgWindowId!, orphan.bundleId, window.title ?? "", names, "reason:", reason)
+        live[wid] = saved(window, orphan.workspaceIds)
+        pending.removeValue(forKey: wid)
+        // a window restored as Unassigned may still get a title override which has saved Workspaces
+        if !orphan.workspaceIds.isEmpty { settled.insert(wid) }
+        for id in focusOrders.keys where !orphan.workspaceIds.contains(id) {
+            focusOrders[id]!.removeAll { $0 == wid }
+        }
+        Logger.info("window restored to workspaces", wid, orphan.bundleId, window.title ?? "", names(orphan.workspaceIds), "reason:", reason)
         scheduleSave()
     }
 
     private static func bestTitleMatch(_ bundleId: String, _ title: String, _ window: Window) -> Int? {
         guard !title.isEmpty else { return nil }
-        var candidates = orphans.indices.filter { orphans[$0].bundleId == bundleId && orphans[$0].title == title }
+        return closest(orphans.indices.filter { isTitleMatchCandidate($0, bundleId) && orphans[$0].title == title }, window)
+    }
+
+    private static func bestOverrideMatch(_ bundleId: String, _ window: Window) -> Int? {
+        guard let name = Window.titleOverride(bundleId, window.title ?? "") else { return nil }
+        return closest(orphans.indices.filter { isTitleMatchCandidate($0, bundleId) && Window.titleOverride(bundleId, orphans[$0].title) == name }, window)
+    }
+
+    /// saved Unassigned windows are only recognised by id: a title says nothing about them
+    private static func isTitleMatchCandidate(_ orphanIndex: Int, _ bundleId: String) -> Bool {
+        return orphans[orphanIndex].bundleId == bundleId && !orphans[orphanIndex].workspaceIds.isEmpty
+    }
+
+    private static func closest(_ orphanIndices: [Int], _ window: Window) -> Int? {
+        var candidates = orphanIndices
         guard !candidates.isEmpty else { return nil }
         // a saved window which is still open will be matched by its id; its state isn't up for grabs
         let openWids = openWindowIds()
@@ -302,6 +392,7 @@ class Workspaces {
         }
         live[wid] = saved
         pending.removeValue(forKey: wid)
+        settled.insert(wid)
         Logger.info("window workspaces changed", wid, window.title ?? "", saved.workspaceIds)
         scheduleSave()
     }
@@ -411,13 +502,15 @@ class Workspaces {
                 live[wid] = saved
             }
         }
-        orphans.removeAll { now - ($0.closedAt ?? now) > orphanMaxAge }
+        if now - launchedAt > discoveryDuration {
+            orphans.removeAll { $0.workspaceIds.isEmpty }
+        }
         if orphans.count > orphanMaxCount {
             orphans.sort { ($0.closedAt ?? now) > ($1.closedAt ?? now) }
             orphans.removeLast(orphans.count - orphanMaxCount)
         }
-        // unassigned windows carry nothing worth restoring
-        let windows = live.values.filter { !$0.workspaceIds.isEmpty } + orphans
+        // Unassigned windows are saved too, so an AltTab restart doesn't mistake them for restored windows by title
+        let windows = Array(live.values) + orphans
         let state = State(bootTime: bootTime, activeWorkspaceId: activeId, windows: windows, focusOrders: focusOrders)
         do {
             let encoder = JSONEncoder()

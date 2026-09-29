@@ -366,8 +366,9 @@ class Windows {
         sort()
         if (!list.contains { $0.shouldShowTheUser }) {
             // while searching, an empty result is a normal state: we keep the switcher open
-            // showing the search field, so the user can fix their query
-            return WindowSearch.isActive
+            // showing the search field, so the user can fix their query. Same for a Workspace without windows:
+            // the switcher opens and names it, rather than nothing happening
+            return WindowSearch.isActive || Workspaces.isFiltering(Preferences.workspacesToShow[App.app.shortcutIndex])
         }
         return true
     }
@@ -493,13 +494,14 @@ class Windows {
                 return true
             }() &&
             !(!(Preferences.showHiddenWindows[shortcutIndex] != .hide) && window.isHidden) &&
+            // windowless apps belong to no Workspace: only lists showing Unassigned windows show them
+            Workspaces.isShown(window, Preferences.workspacesToShow[shortcutIndex]) &&
             ((!Preferences.hideWindowlessApps && window.isWindowlessApp) ||
                 !window.isWindowlessApp &&
                 !(!(Preferences.showFullscreenWindows[shortcutIndex] != .hide) && window.isFullscreen) &&
                 !(!(Preferences.showMinimizedWindows[shortcutIndex] != .hide) && window.isMinimized) &&
                 !(Preferences.spacesToShow[shortcutIndex] == .visible && !Spaces.visibleSpaces.contains { visibleSpace in window.spaceIds.contains { $0 == visibleSpace } }) &&
                 !(Preferences.screensToShow[shortcutIndex] == .showingAltTab && !window.isOnScreen(NSScreen.preferred)) &&
-                Workspaces.isShown(window, Preferences.workspacesToShow[shortcutIndex]) &&
                 (Preferences.showTabsAsWindows || !window.isTabbed))
     }
 

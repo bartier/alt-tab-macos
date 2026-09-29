@@ -128,7 +128,8 @@ class App: AppCenterApplication {
         // If the user didn't navigate after summoning the Windows list for the active app,
         // enforce toggle-to-second-most-recent behavior on release when ordering by Recently Focused.
         if !userNavigatedThisSummon { ensureSecondMRUForActiveAppIfNeeded() }
-        let focusedWindow = Windows.focusedWindow()
+        // with nothing shown (e.g. a Workspace without windows), the selection points at a window the list hides
+        let focusedWindow = Windows.focusedWindow().flatMap { $0.shouldShowTheUser ? $0 : nil }
         Logger.info(focusedWindow?.cgWindowId.map { String(describing: $0) } ?? "nil", focusedWindow?.title ?? "nil", focusedWindow?.application.pid ?? "nil", focusedWindow?.application.bundleIdentifier ?? "nil")
         focusSelectedWindow(focusedWindow)
     }
@@ -169,6 +170,13 @@ class App: AppCenterApplication {
         // an empty search result has no meaningful selection; wait for the user to fix their query
         guard !WindowSearch.hasNoMatches else { return }
         focusTarget()
+    }
+
+    /// ⌘1…⌘9 in the switcher: it closes, and the Workspace comes forward as it was left
+    func activateWorkspace(_ index: Int) {
+        guard appIsBeingUsed, Preferences.workspaces.indices.contains(index) else { return }
+        hideUi()
+        Workspaces.activate(Preferences.workspaces[index].id)
     }
 
     @objc func checkForUpdatesNow(_ sender: NSMenuItem) {

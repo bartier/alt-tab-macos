@@ -82,8 +82,14 @@ class Menubar {
         let header = NSMenuItem(title: NSLocalizedString("Workspaces", comment: "Menubar section"), action: nil, keyEquivalent: "")
         header.isEnabled = false
         items.append(header)
-        for workspace in workspaces {
-            items.append(workspaceActions.item(workspace.name, #selector(WorkspaceMenuActions.activate(_:)), workspace.id, workspace.id == activeId))
+        for (i, workspace) in workspaces.enumerated() {
+            let item = workspaceActions.item(workspace.name, #selector(WorkspaceMenuActions.activate(_:)), workspace.id, workspace.id == activeId)
+            // the same keys switch Workspace from the switcher
+            if i < WorkspaceSwitchKeys.keyCodes.count {
+                item.keyEquivalent = String(i + 1)
+                item.keyEquivalentModifierMask = .command
+            }
+            items.append(item)
         }
         items.append(workspaceActions.item(NSLocalizedString("No workspace", comment: "Menubar option"), #selector(WorkspaceMenuActions.activate(_:)), nil, activeId == nil))
         items.append(workspaceActions.item(NSLocalizedString("Manage windows…", comment: "Menubar option"), #selector(WorkspaceMenuActions.manageWindows), nil, false))

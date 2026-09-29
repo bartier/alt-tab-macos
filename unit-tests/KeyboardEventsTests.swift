@@ -1,4 +1,5 @@
 import XCTest
+import ShortcutRecorder
 
 final class KeyboardEventsUtilsTests: XCTestCase {
     // alt-down > tab-down > tab-up > alt-up
@@ -124,6 +125,31 @@ final class KeyboardEventsUtilsTests: XCTestCase {
         ModifierFlags.current = []
         handleKeyboardEvent(nil, nil, nil, [], false)
         XCTAssertEqual(ControlsTab.shortcutsActionsTriggered, ["nextWindowShortcut"])
+    }
+
+    // alt-down > space-down (global) > space-down (while open) > alt-up > space-down
+    // Space is also "focus selected window"; while holding ⌥, it must only select the next window
+    func testNextWindowKeyIsAlsoALocalShortcut() throws {
+        resetState()
+        Preferences.shortcutStyle[3] = .doNothingOnRelease
+        ModifierFlags.current = [.option]
+        handleKeyboardEvent(nil, nil, nil, [.option], false)
+        XCTAssertEqual(ControlsTab.shortcutsActionsTriggered, [])
+        handleKeyboardEvent(KeyboardEventsTestable.globalShortcutsIds["nextWindowShortcut4"], .down, nil, nil, false)
+        XCTAssertEqual(ControlsTab.shortcutsActionsTriggered, ["nextWindowShortcut4"])
+        handleKeyboardEvent(nil, nil, keycodeMap[" "], [.option], false)
+        XCTAssertEqual(ControlsTab.shortcutsActionsTriggered, ["nextWindowShortcut4", "nextWindowShortcut4"])
+        ModifierFlags.current = []
+        handleKeyboardEvent(nil, nil, nil, [], false)
+        XCTAssertEqual(ControlsTab.shortcutsActionsTriggered, ["nextWindowShortcut4", "nextWindowShortcut4"])
+        handleKeyboardEvent(nil, nil, keycodeMap[" "], [], false)
+        XCTAssertEqual(ControlsTab.shortcutsActionsTriggered, ["nextWindowShortcut4", "nextWindowShortcut4", "focusWindowShortcut"])
+    }
+
+    // the default of shortcut 4 is stored as the hold key followed by the recorder's name for the key
+    func testOptionSpaceParses() throws {
+        XCTAssertEqual(Shortcut(keyEquivalent: "⌥Space")?.carbonKeyCode, keycodeMap[" "])
+        XCTAssertEqual(Shortcut(keyEquivalent: "⌥Space")?.modifierFlags, [.option])
     }
 
     // alt-down > tab-down > tab-up > `-down > `-up

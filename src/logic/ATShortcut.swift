@@ -49,7 +49,14 @@ class ATShortcut {
         }
         // other shortcuts: contains exactly or exactly + holdShortcut modifiers
         let holdModifiers = ControlsTab.shortcuts[Preferences.indexToName("holdShortcut", App.app.shortcutIndex)]?.shortcut.carbonModifierFlags ?? 0
-        return modifiers == shortcut.carbonModifierFlags || modifiers == (shortcut.carbonModifierFlags | holdModifiers)
+        return modifiers == shortcut.carbonModifierFlags || (modifiers == (shortcut.carbonModifierFlags | holdModifiers) && !isNextWindowKey())
+    }
+
+    /// with ⌥Space as the shortcut, pressing Space again while holding ⌥ selects the next window; it isn't also
+    /// Space, "focus selected window"
+    private func isNextWindowKey() -> Bool {
+        guard scope == .local, let nextWindowShortcut = ControlsTab.shortcuts[Preferences.indexToName("nextWindowShortcut", App.app.shortcutIndex)] else { return false }
+        return nextWindowShortcut.shortcut.carbonKeyCode == shortcut.carbonKeyCode
     }
 
     func shouldTrigger() -> Bool {

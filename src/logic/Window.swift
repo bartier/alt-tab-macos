@@ -252,13 +252,15 @@ class Window {
     }
 
     // applies the first matching user-defined override rule to the raw title;
-    // when multiple visible windows resolve to the same replacement, appends a
-    // bounded prefix of the raw title so each cell stays distinguishable.
+    // when multiple visible windows of the same app resolve to the same replacement, appends a
+    // bounded prefix of the raw title so each cell stays distinguishable. Other apps' windows are
+    // told apart by their icon, and a raw title equal to the replacement tells nothing more
     func displayTitle() -> String {
         let raw = title ?? ""
         guard let replacement = matchedReplacement() else { return raw }
+        guard raw != replacement else { return replacement }
         let hasSibling = Windows.list.contains { other in
-            other !== self && other.shouldShowTheUser && other.matchedReplacement() == replacement
+            other !== self && other.shouldShowTheUser && other.application.pid == application.pid && other.matchedReplacement() == replacement
         }
         guard hasSibling else { return replacement }
         let maxPrefixLen = 30

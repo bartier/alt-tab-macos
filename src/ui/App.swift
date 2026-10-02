@@ -225,6 +225,8 @@ class App: AppCenterApplication {
             thumbnailsPanel.thumbnailsView.navigateColumns(direction, allowWrap: allowWrap)
         } else if direction == .up || direction == .down {
             thumbnailsPanel.thumbnailsView.navigateUpOrDown(direction, allowWrap: allowWrap)
+        } else if (direction == .leading || direction == .trailing) && Windows.cyclesByRecency() {
+            Windows.cycleFocusedWindowIndexByRecency(direction.step(), allowWrap: allowWrap)
         } else {
             Windows.cycleFocusedWindowIndex(direction.step(), allowWrap: allowWrap)
         }

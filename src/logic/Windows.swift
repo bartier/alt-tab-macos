@@ -69,7 +69,7 @@ class Windows {
 
     /// ordering comparator for a given shortcut index; reads no mutable UI state,
     /// so it can also order copies of the list for other indexes (e.g. CLI queries)
-    static func isSortedBefore(_ w0: Window, _ w1: Window, _ shortcutIndex: Int) -> Bool {
+    static func isSortedBefore(_ w0: Window, _ w1: Window, _ shortcutIndex: Int, _ sortTypeOverride: WindowOrderPreference? = nil) -> Bool {
         // separate buckets for these types of windows
         if w0.isWindowlessApp != w1.isWindowlessApp {
             return w1.isWindowlessApp
@@ -81,7 +81,7 @@ class Windows {
             return w1.isMinimized
         }
         // sort within each buckets
-        let sortType = Preferences.windowOrder[shortcutIndex]
+        let sortType = sortTypeOverride ?? Preferences.windowOrder[shortcutIndex]
         if sortType == .recentlyFocused {
             return w0.lastFocusOrder < w1.lastFocusOrder
         }
@@ -143,9 +143,13 @@ class Windows {
         // the front app's focusedWindow has been observed yet. This avoids
         // a race where app.focusedWindow can be nil briefly after a switch,
         // causing selection to wrongly default to the current front app.
-        if Preferences.windowOrder[App.app.shortcutIndex] != .recentlyFocused,
-           let lastFocusedWindowIndex = getLastFocusedWindowIndex() {
-            updateFocusedAndHoveredWindowIndex(lastFocusedWindowIndex)
+        // Other orders only change how the list looks: they start on the previous window too
+        if cyclesByRecency() {
+            let order = shownIndicesByRecency()
+            if let first = order.first {
+                let isCurrentWindow = first == getLastFocusedWindowIndex()
+                updateFocusedAndHoveredWindowIndex(isCurrentWindow && order.count > 1 ? order[1] : first)
+            }
         } else {
             cycleFocusedWindowIndex(1)
             if focusedWindowIndex == 0 {
@@ -280,6 +284,34 @@ class Windows {
             return
         }
         updateFocusedAndHoveredWindowIndex(nextIndex)
+    }
+
+    /// lists not ordered by Recently Focused (e.g. alphabetical) are only displayed in that order:
+    /// next/previous window still go through the windows from the most recently focused
+    static func cyclesByRecency() -> Bool {
+        return Preferences.windowOrder[App.app.shortcutIndex] != .recentlyFocused
+    }
+
+    static func shownIndicesByRecency() -> [Int] {
+        return list.indices
+            .filter { list[$0].shouldShowTheUser }
+            .sorted { isSortedBefore(list[$0], list[$1], App.app.shortcutIndex, .recentlyFocused) }
+    }
+
+    static func cycleFocusedWindowIndexByRecency(_ step: Int, allowWrap: Bool = true) {
+        let order = shownIndicesByRecency()
+        guard !order.isEmpty else { return }
+        guard let position = order.firstIndex(of: focusedWindowIndex) else {
+            updateFocusedAndHoveredWindowIndex(step > 0 ? order.first! : order.last!)
+            return
+        }
+        var next = position + step
+        if next < 0 || next >= order.count {
+            // don't wrap-around at the end, if key-repeat
+            if !allowWrap || ATShortcut.lastEventIsARepeat || KeyRepeatTimer.timer?.isValid ?? false { return }
+            next = (next + order.count) % order.count
+        }
+        updateFocusedAndHoveredWindowIndex(order[next])
     }
 
     static func windowIndexAfterCycling(_ step: Int) -> Int {

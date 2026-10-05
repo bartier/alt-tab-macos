@@ -19,6 +19,10 @@ _Avoid_: Unknown
 A column of the switcher: Browser, IDE, Utils… Apps are assigned to Groups (by bundle ID prefix or app name), so a window's Group comes from its app, whatever its Workspace. Windows of apps in no Group go to the **Ungrouped** column, always last.
 _Avoid_: Category, section, lane
 
+**Custom Order**:
+The order the user dragged windows into in the switcher: holding the mouse on a window, or dragging it, picks it up; in Group columns it moves only up and down its column. It applies to lists set to Alphabetical Order: windows dragged into place come first, in that order, and the others follow alphabetically. A window is remembered by its app and its title override, or its title; a window it doesn't recognise (e.g. a browser whose title changed) goes right after its app's first remembered window. Closed windows keep their place. Preferences › Order shows it and resets it to Alphabetical Order.
+_Avoid_: Manual sort, pinned order
+
 **Membership rule** (not built):
 A title override that also picks a Workspace. The Workspace on an override is optional.
 _Avoid_: Pattern, filter

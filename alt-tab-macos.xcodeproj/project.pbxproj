@@ -282,8 +282,10 @@
 		D04BA000000000000000001B /* TitleOverridesTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = D04BA000000000000000001A /* TitleOverridesTab.swift */; };
 		D04BA000000000000000002B /* TitleOverridesTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D04BA000000000000000002A /* TitleOverridesTableView.swift */; };
 		D04BA000000000000000003B /* Workspaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = D04BA000000000000000003A /* Workspaces.swift */; };
+		D04BA000000000000000006B /* CustomOrder.swift in Sources */ = {isa = PBXBuildFile; fileRef = D04BA000000000000000006A /* CustomOrder.swift */; };
 		D04BA000000000000000004B /* WorkspacesTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = D04BA000000000000000004A /* WorkspacesTab.swift */; };
 		D04BA000000000000000005B /* WindowsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = D04BA000000000000000005A /* WindowsTab.swift */; };
+		D04BA000000000000000007B /* OrderTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = D04BA000000000000000007A /* OrderTab.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -544,8 +546,10 @@
 		D04BA000000000000000001A /* TitleOverridesTab.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TitleOverridesTab.swift; sourceTree = "<group>"; };
 		D04BA000000000000000002A /* TitleOverridesTableView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TitleOverridesTableView.swift; sourceTree = "<group>"; };
 		D04BA000000000000000003A /* Workspaces.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Workspaces.swift; sourceTree = "<group>"; };
+		D04BA000000000000000006A /* CustomOrder.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CustomOrder.swift; sourceTree = "<group>"; };
 		D04BA000000000000000004A /* WorkspacesTab.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = WorkspacesTab.swift; sourceTree = "<group>"; };
 		D04BA000000000000000005A /* WindowsTab.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = WindowsTab.swift; sourceTree = "<group>"; };
+		D04BA000000000000000007A /* OrderTab.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OrderTab.swift; sourceTree = "<group>"; };
 		D04BA282BB16C1554595A968 /* Applications.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Applications.swift; sourceTree = "<group>"; };
 		D04BA2A68FFD585C3A64434A /* zh-CN */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.strings; name = "zh-CN"; path = InfoPlist.strings; sourceTree = "<group>"; };
 		D04BA2C7B51F68651B3C60E2 /* 6 windows - 1 line.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "6 windows - 1 line.jpg"; sourceTree = "<group>"; };
@@ -1258,6 +1262,7 @@
 			children = (
 				D04BACD976030676FD0761D5 /* Windows.swift */,
 				D04BA000000000000000003A /* Workspaces.swift */,
+				D04BA000000000000000006A /* CustomOrder.swift */,
 				D04BA9B93823398A542FF7A0 /* Preferences.swift */,
 				D04BA68C2561D9EE4FD851B8 /* NSScreen.swift */,
 				D04BA7C6F2519091717F4B4E /* SystemPermissions.swift */,
@@ -1447,6 +1452,7 @@
 				D04BA000000000000000001A /* TitleOverridesTab.swift */,
 				D04BA000000000000000004A /* WorkspacesTab.swift */,
 				D04BA000000000000000005A /* WindowsTab.swift */,
+				D04BA000000000000000007A /* OrderTab.swift */,
 			);
 			path = tabs;
 			sourceTree = "<group>";
@@ -2396,8 +2402,10 @@
 				D04BA000000000000000001B /* TitleOverridesTab.swift in Sources */,
 				D04BA000000000000000002B /* TitleOverridesTableView.swift in Sources */,
 				D04BA000000000000000003B /* Workspaces.swift in Sources */,
+				D04BA000000000000000006B /* CustomOrder.swift in Sources */,
 				D04BA000000000000000004B /* WorkspacesTab.swift in Sources */,
 				D04BA000000000000000005B /* WindowsTab.swift in Sources */,
+				D04BA000000000000000007B /* OrderTab.swift in Sources */,
 				D04BA56789A2AF52557A9BFF /* AppCenterCrashes.swift in Sources */,
 				D04BADA3F2DAB820D6FC6E75 /* AppCenterApplication.m in Sources */,
 				D04BAA16F21AC41A23DDA63D /* ControlsTab.swift in Sources */,

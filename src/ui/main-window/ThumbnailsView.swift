@@ -16,6 +16,13 @@ class ThumbnailsView: NSVisualEffectView {
     private var columnHeadersHeight = CGFloat(0)
     static var thumbnailsWidth = CGFloat(0.0)
     static var thumbnailsHeight = CGFloat(0.0)
+    /// the window being dragged to a new place in the list; see CustomOrder
+    private(set) weak var reorderingView: ThumbnailView?
+    private var reorderGrabOffset = NSPoint.zero
+    private var reorderStartOrigin = NSPoint.zero
+    /// where the dragged window would land: next to this window, before or after it
+    private var reorderTarget: (view: ThumbnailView, isAfter: Bool)?
+    private let reorderIndicator = NSView()
 
     convenience init() {
         self.init(frame: .zero)
@@ -151,6 +158,8 @@ class ThumbnailsView: NSVisualEffectView {
     }
 
     func updateItemsAndLayout() {
+        // the cells are about to be recycled for other windows
+        cancelReorder()
         let widthMax = ThumbnailsPanel.maxThumbnailsWidth().rounded()
         workspaceTitleView.refresh()
         searchFieldView.refresh()
@@ -382,6 +391,116 @@ class ThumbnailsView: NSVisualEffectView {
                 view.drawHighlight()
             }
         }
+    }
+
+    // MARK: - reordering
+
+    func beginReorder(_ view: ThumbnailView, _ locationInWindow: NSPoint) {
+        guard let documentView = scrollView.documentView else { return }
+        cancelReorder()
+        let point = documentView.convert(locationInWindow, from: nil)
+        reorderingView = view
+        reorderStartOrigin = view.frame.origin
+        reorderGrabOffset = NSPoint(x: point.x - view.frame.origin.x, y: point.y - view.frame.origin.y)
+        view.layer?.zPosition = 1
+        view.alphaValue = 0.8
+        reorderIndicator.wantsLayer = true
+        reorderIndicator.layer!.backgroundColor = NSColor.systemAccentColor.cgColor
+        reorderIndicator.layer!.cornerRadius = 1
+        reorderIndicator.layer!.zPosition = 2
+        reorderIndicator.isHidden = true
+        documentView.addSubview(reorderIndicator)
+        Logger.info("reorder start", view.window_?.title ?? "nil")
+    }
+
+    func moveReorder(_ locationInWindow: NSPoint) {
+        guard let view = reorderingView, let documentView = scrollView.documentView else { return }
+        let point = documentView.convert(locationInWindow, from: nil)
+        let bounds = documentView.bounds
+        let y = min(max(point.y - reorderGrabOffset.y, bounds.minY), bounds.maxY - view.frame.height)
+        // in a column, a window can only move up or down: its Group (column) comes from its app
+        let x = isColumnLayout ? reorderStartOrigin.x : min(max(point.x - reorderGrabOffset.x, bounds.minX), bounds.maxX - view.frame.width)
+        view.frame.origin = NSPoint(x: x, y: y)
+        reorderTarget = findReorderTarget(view, point)
+        showReorderIndicator()
+    }
+
+    func endReorder() {
+        guard let view = reorderingView, let dragged = view.window_ else { cancelReorder(); return }
+        let target = reorderTarget
+        cancelReorder()
+        var shown = Windows.list.filter { $0.shouldShowTheUser }
+        let before = shown
+        if let target, let anchor = target.view.window_, anchor !== dragged {
+            shown.removeAll { $0 === dragged }
+            if let i = shown.firstIndex(where: { $0 === anchor }) {
+                shown.insert(dragged, at: target.isAfter ? i + 1 : i)
+            }
+        }
+        guard !zip(shown, before).allSatisfy({ $0 === $1 }) else {
+            Logger.info("reorder end, unchanged", dragged.title ?? "nil")
+            return
+        }
+        Logger.info("reorder end", dragged.title ?? "nil", target.map { "\($0.isAfter ? "after" : "before") \($0.view.window_?.title ?? "nil")" } ?? "nil")
+        CustomOrder.save(shown)
+        OrderTab.reload()
+        App.app.refreshOpenUi([], .refreshUiAfterExternalEvent)
+        if App.app.appIsBeingUsed, let i = Windows.list.firstIndex(where: { $0 === dragged }) {
+            Windows.updateFocusedAndHoveredWindowIndex(i)
+        }
+    }
+
+    /// puts the dragged window back, e.g. when the switcher hides mid-drag
+    func cancelReorder() {
+        reorderIndicator.removeFromSuperview()
+        reorderTarget = nil
+        guard let view = reorderingView else { return }
+        reorderingView = nil
+        // the rest of this mouse gesture neither picks the window up again, nor clicks it
+        view.receivedMouseDown = false
+        view.frame.origin = reorderStartOrigin
+        view.layer?.zPosition = 0
+        view.alphaValue = 1
+    }
+
+    private func findReorderTarget(_ dragged: ThumbnailView, _ point: NSPoint) -> (view: ThumbnailView, isAfter: Bool)? {
+        if isColumnLayout {
+            guard let column = dragged.window_?.rowIndex, columns.indices.contains(column) else { return nil }
+            let others = columns[column].filter { $0 !== dragged }
+            guard let last = others.last else { return nil }
+            // documentView is flipped: y grows downwards
+            if let next = others.first(where: { $0.frame.midY > dragged.frame.midY }) {
+                return (next, false)
+            }
+            return (last, true)
+        }
+        let others = rows.joined().filter { $0 !== dragged }
+        guard let nearest = others.min(by: { distance($0.frame, point) < distance($1.frame, point) }) else { return nil }
+        let isLeftOfCenter = point.x < nearest.frame.midX
+        return (nearest, App.shared.userInterfaceLayoutDirection == .leftToRight ? !isLeftOfCenter : isLeftOfCenter)
+    }
+
+    private func distance(_ frame: NSRect, _ point: NSPoint) -> CGFloat {
+        return hypot(frame.midX - point.x, frame.midY - point.y)
+    }
+
+    private func showReorderIndicator() {
+        guard let (view, isAfter) = reorderTarget else {
+            reorderIndicator.isHidden = true
+            return
+        }
+        let gap = Appearance.interCellPadding / 2
+        let thickness = CGFloat(2)
+        let frame = view.frame
+        if isColumnLayout {
+            let y = isAfter ? frame.maxY + gap : frame.minY - gap
+            reorderIndicator.frame = NSRect(x: frame.minX, y: y - thickness / 2, width: frame.width, height: thickness)
+        } else {
+            let isRightEdge = isAfter == (App.shared.userInterfaceLayoutDirection == .leftToRight)
+            let x = isRightEdge ? frame.maxX + gap : frame.minX - gap
+            reorderIndicator.frame = NSRect(x: x - thickness / 2, y: frame.minY, width: thickness, height: frame.height)
+        }
+        reorderIndicator.isHidden = false
     }
 
     private func shiftRow(_ maxX: CGFloat, _ rowWidth: CGFloat, _ rowStartIndex: Int, _ index: Int) {

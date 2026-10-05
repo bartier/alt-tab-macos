@@ -48,8 +48,9 @@ class PreferencesWindow: NSWindow {
             (5, NSLocalizedString("Window Titles", comment: ""), "titleOverrides", "textformat", TitleOverridesTab.initTab()),
             (6, NSLocalizedString("Workspaces", comment: ""), "workspaces", "rectangle.split.3x1", WorkspacesTab.initTab()),
             (7, NSLocalizedString("Windows", comment: ""), "windows", "macwindow.on.rectangle", WindowsTab.initTab()),
-            (8, NSLocalizedString("About", comment: ""), "about", "info.circle", AboutTab.initTab()),
-            (9, NSLocalizedString("Acknowledgments", comment: ""), "acknowledgments", "hand.thumbsup", AcknowledgmentsTab.initTab()),
+            (8, NSLocalizedString("Order", comment: ""), "order", "arrow.up.arrow.down", OrderTab.initTab()),
+            (9, NSLocalizedString("About", comment: ""), "about", "info.circle", AboutTab.initTab()),
+            (10, NSLocalizedString("Acknowledgments", comment: ""), "acknowledgments", "hand.thumbsup", AcknowledgmentsTab.initTab()),
         ].forEach { makeToolbarItem($0.0, $0.1, $0.2, $0.3, $0.4) }
         largestTabWidth = Array(toolbarItems.values).reduce(CGFloat(0)) { max($0, $1.2.subviews[0].fittingSize.width) }
         Array(toolbarItems.values).forEach {
@@ -92,6 +93,9 @@ class PreferencesWindow: NSWindow {
     @objc func tabItemClicked(_ item: NSToolbarItem) {
         if item.itemIdentifier.rawValue == "windows" {
             WindowsTab.reload()
+        }
+        if item.itemIdentifier.rawValue == "order" {
+            OrderTab.reload()
         }
         let item = toolbarItems[item.itemIdentifier]!
         contentView = item.2

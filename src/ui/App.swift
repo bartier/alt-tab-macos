@@ -78,6 +78,7 @@ class App: AppCenterApplication {
         Windows.resetInteractionState()
         isFirstSummon = true
         MouseEvents.toggle(false)
+        thumbnailsPanel.thumbnailsView.cancelReorder()
         hideThumbnailPanelWithoutChangingKeyWindow()
         if !keepPreview {
             previewPanel.orderOut(nil)
@@ -197,6 +198,7 @@ class App: AppCenterApplication {
 
     @objc func showPreferencesWindow() {
         WindowsTab.reload()
+        OrderTab.reload()
         showSecondaryWindow(preferencesWindow)
     }
 

@@ -87,6 +87,7 @@ class Preferences {
         "titleOverrides": "[]",
         "workspaces": "[]",
         "groups": GroupEntry.defaults(),
+        "customOrder": "[]",
         "updatePolicy": UpdatePolicyPreference.autoCheck.indexAsString,
         "crashPolicy": CrashPolicyPreference.ask.indexAsString,
         "shortcutStyle": ShortcutStylePreference.focusOnRelease.indexAsString,
@@ -143,6 +144,7 @@ class Preferences {
     static var titleOverrides: [TitleOverrideEntry] { CachedUserDefaults.json("titleOverrides", [TitleOverrideEntry].self) }
     static var workspaces: [WorkspaceEntry] { CachedUserDefaults.json("workspaces", [WorkspaceEntry].self) }
     static var groups: [GroupEntry] { CachedUserDefaults.json("groups", [GroupEntry].self) }
+    static var customOrder: [CustomOrderEntry] { CachedUserDefaults.json("customOrder", [CustomOrderEntry].self) }
     static var previewFocusedWindow: Bool { CachedUserDefaults.bool("previewFocusedWindow") }
 
     // macro values
@@ -200,7 +202,7 @@ class Preferences {
     }
 
     static func set<T>(_ key: String, _ value: T) where T: Encodable {
-        let needsJsonEncoding = key == "blacklist" || key == "titleOverrides" || key == "workspaces" || key == "groups"
+        let needsJsonEncoding = key == "blacklist" || key == "titleOverrides" || key == "workspaces" || key == "groups" || key == "customOrder"
         UserDefaults.standard.set(needsJsonEncoding ? jsonEncode(value) : value, forKey: key)
         CachedUserDefaults.cache.removeValue(forKey: key)
     }

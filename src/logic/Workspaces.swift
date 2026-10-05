@@ -14,8 +14,10 @@ struct GroupEntry: Codable {
     var apps: [String]
 
     func contains(_ application: Application) -> Bool {
-        let bundleId = application.bundleIdentifier ?? ""
-        let appName = application.localizedName ?? ""
+        return contains(application.bundleIdentifier ?? "", application.localizedName ?? "")
+    }
+
+    func contains(_ bundleId: String, _ appName: String) -> Bool {
         return apps.contains { app in
             !app.isEmpty && (bundleId.hasPrefix(app) || appName.caseInsensitiveCompare(app) == .orderedSame)
         }

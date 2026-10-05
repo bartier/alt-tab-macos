@@ -38,6 +38,11 @@ class ThumbnailView: FlippedView {
     var windowIndicatorIcons: [ThumbnailFontIconView] { [hiddenIcon, fullscreenIcon, minimizedIcon, spaceIcon] }
 
     var receivedMouseDown = false
+    private var mouseDownLocation: NSPoint?
+    /// holding the mouse down on a window, or dragging it, picks it up to reorder the list; see CustomOrder
+    private var holdTimer: Timer?
+    private static let holdDelay = 0.3
+    private static let dragThreshold = CGFloat(5)
 
     // for VoiceOver cursor
     override var canBecomeKeyView: Bool { true }
@@ -75,15 +80,50 @@ class ThumbnailView: FlippedView {
 
     override func mouseDown(with event: NSEvent) {
         receivedMouseDown = true
+        mouseDownLocation = event.locationInWindow
+        holdTimer?.invalidate()
+        holdTimer = canBeReordered() ? Timer.scheduledTimer(withTimeInterval: ThumbnailView.holdDelay, repeats: false) { [weak self] _ in
+            self?.beginReorder(event.locationInWindow)
+        } : nil
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard receivedMouseDown else { return }
+        let thumbnailsView = App.app.thumbnailsPanel.thumbnailsView
+        if thumbnailsView.reorderingView !== self, let start = mouseDownLocation,
+           hypot(event.locationInWindow.x - start.x, event.locationInWindow.y - start.y) >= ThumbnailView.dragThreshold {
+            beginReorder(event.locationInWindow)
+        }
+        if thumbnailsView.reorderingView === self {
+            thumbnailsView.moveReorder(event.locationInWindow)
+        }
     }
 
     override func mouseUp(with event: NSEvent) {
+        holdTimer?.invalidate()
+        holdTimer = nil
         if receivedMouseDown {
-            if bounds.contains(convert(event.locationInWindow, from: nil)) {
+            receivedMouseDown = false
+            let thumbnailsView = App.app.thumbnailsPanel.thumbnailsView
+            if thumbnailsView.reorderingView === self {
+                thumbnailsView.endReorder()
+            } else if bounds.contains(convert(event.locationInWindow, from: nil)) {
+                Logger.info("click", window_?.cgWindowId.map { String(describing: $0) } ?? "nil", window_?.title ?? "nil")
                 mouseUpCallback()
             }
-            receivedMouseDown = false
         }
+    }
+
+    private func canBeReordered() -> Bool {
+        guard let window_ else { return false }
+        return CustomOrder.isEnabled(App.app.shortcutIndex) && !window_.isWindowlessApp
+    }
+
+    private func beginReorder(_ locationInWindow: NSPoint) {
+        holdTimer?.invalidate()
+        holdTimer = nil
+        guard receivedMouseDown, canBeReordered(), App.app.appIsBeingUsed else { return }
+        App.app.thumbnailsPanel.thumbnailsView.beginReorder(self, locationInWindow)
     }
 
     override func otherMouseUp(with event: NSEvent) {

@@ -90,7 +90,11 @@ class Windows {
         }
         var order = ComparisonResult.orderedSame
         if sortType == .alphabetical {
-            order = compareByAppNameThenWindowTitle(w0, w1)
+            // windows the user dragged into place come first, in that order
+            order = CustomOrder.compare(w0, w1)
+            if order == .orderedSame {
+                order = compareByAppNameThenWindowTitle(w0, w1)
+            }
         }
         if sortType == .space {
             if w0.isOnAllSpaces && w1.isOnAllSpaces {
